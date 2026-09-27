@@ -1557,7 +1557,9 @@ async function startServer() {
       if (loaded) {
         console.log('[Supabase Startup] Newer state successfully loaded from Supabase Cloud!');
       } else {
-        console.log('[Supabase Startup] Local database is current and verified; live sync maintained.');
+        console.log('[Supabase Startup] Local database is current. Performing initial relational seeding to Supabase Cloud...');
+        const syncResult = await store.syncToSupabase();
+        console.log('[Supabase Startup] Cloud relational tables successfully seeded:', syncResult.message);
       }
     } catch (err: any) {
       console.warn('[Supabase Startup] Cloud sync notice:', err.message);
