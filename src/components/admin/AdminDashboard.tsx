@@ -375,7 +375,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <Banknote className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition" />
           </div>
           <div className="text-xl font-bold text-emerald-900">
-            ₹{summary.quickCodCollectionAmount.toLocaleString()}
+            ₹{(summary.quickCodCollectionAmount ?? 0).toLocaleString()}
           </div>
           <div className="text-[11px] text-emerald-700 mt-1 font-medium">
             Cash In Hand / Settled

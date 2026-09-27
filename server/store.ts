@@ -2181,31 +2181,15 @@ const getInitialSeeds = (): DatabaseSchema => {
 
 class DatabaseStore {
   private db: DatabaseSchema | null = null;
-  private isWriting = false;
 
   constructor() {
     this.init();
   }
 
   private init() {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        this.db = JSON.parse(raw);
-        this.migrateDb();
-      } else {
-        this.db = getInitialSeeds();
-        this.saveSync();
-      }
-    } catch (e) {
-      console.error('Error loading database file, initializing seeds:', e);
-      this.db = getInitialSeeds();
-      this.saveSync();
-    }
+    // Boot in-memory with seeds. Will be hydrated synchronously/asynchronously from Supabase.
+    this.db = getInitialSeeds();
+    this.migrateDb();
   }
 
   private migrateDb() {
@@ -2283,7 +2267,7 @@ class DatabaseStore {
           autoSync: true,
           lastTestedAt: new Date().toISOString(),
           lastTestStatus: 'SUCCESS',
-          lastTestMessage: 'Supabase Cloud Database (bgxnmmecjcgrwtemmjtz) connected',
+          lastTestMessage: 'Supabase Cloud Database connected',
           connected: true,
         };
         modified = true;
@@ -2304,21 +2288,12 @@ class DatabaseStore {
     if (!this.db) return;
     try {
       this.db.lastUpdatedAt = new Date().toISOString();
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      const tmpFile = `${DB_FILE}.tmp`;
-      fs.writeFileSync(tmpFile, JSON.stringify(this.db, null, 2), 'utf-8');
-      fs.renameSync(tmpFile, DB_FILE);
-
-      // Real-time synchronization to Supabase Cloud Database on every entry & update
-      if (this.db) {
-        supabaseService.syncPush(this.db).catch((e) => {
-          console.warn('[Supabase Real-Time Sync] Background push warning:', e?.message || e);
-        });
-      }
+      // Synchronously push to Supabase Cloud Database on every entry & update
+      supabaseService.syncPush(this.db).catch((e) => {
+        console.warn('[Supabase Sync Push] Background push warning:', e?.message || e);
+      });
     } catch (err) {
-      console.error('Failed to write database file:', err);
+      console.error('Failed to save to Supabase:', err);
     }
   }
 
@@ -2331,7 +2306,6 @@ class DatabaseStore {
 
   public save() {
     this.saveSync();
-    this.syncToSupabase().catch((err: any) => console.warn('[Auto-Sync Supabase Error]:', err.message));
   }
 
   public async syncToSupabase() {
@@ -2345,30 +2319,20 @@ class DatabaseStore {
 
   public async loadFromSupabaseIfNewer(): Promise<boolean> {
     try {
+      console.log('[Store] Synchronizing in-memory state from Supabase Cloud snapshot...');
       const res = await supabaseService.syncPull();
       if (res.success && res.data) {
-        const cloudData = res.data;
-        const localTime = this.db?.lastUpdatedAt ? new Date(this.db.lastUpdatedAt).getTime() : 0;
-        const cloudTime = cloudData.lastUpdatedAt || res.updatedAt ? new Date(cloudData.lastUpdatedAt || res.updatedAt).getTime() : 0;
-
-        // If local database has records and is newer than or equal to cloud, DO NOT overwrite with older cloud snapshot
-        const localHasRecords = this.db && Array.isArray(this.db.products) && this.db.products.length > 0;
-        if (localHasRecords && (!cloudTime || localTime >= cloudTime)) {
-          console.log(`[Store] Local data is current (Local: ${this.db?.lastUpdatedAt || 'ready'}, Cloud: ${res.updatedAt || 'n/a'}). Syncing local to Supabase.`);
-          await this.syncToSupabase();
-          return false;
-        }
-
-        // Only hydrate if local has no records or cloud is strictly newer
-        if (cloudTime > localTime || !localHasRecords) {
-          console.log(`[Store] Hydrating from Supabase Cloud snapshot (Cloud timestamp: ${res.updatedAt || cloudData.lastUpdatedAt})...`);
-          this.db = cloudData;
-          this.saveSync();
-          return true;
-        }
+        this.db = res.data;
+        this.migrateDb();
+        console.log('[Store] Hydrated state from Supabase successfully.');
+        return true;
+      } else {
+        console.log('[Store] No cloud snapshot found on Supabase. Priming Supabase with initial seeds...');
+        await this.syncToSupabase();
+        return false;
       }
     } catch (e: any) {
-      console.warn('[Store] Supabase check notice:', e?.message || e);
+      console.warn('[Store] Supabase check notice (will run on seeds fallback):', e?.message || e);
     }
     return false;
   }

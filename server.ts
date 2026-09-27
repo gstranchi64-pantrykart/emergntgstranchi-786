@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import { BusinessService, normalizeMobile } from './server/businessLogic';
 import { store } from './server/store';
 import { supabaseService } from './server/supabase';
+import { getOtpProvider, isProductionOtpMode } from './server/otpService';
 import { User } from './src/types';
 
 async function startServer() {
@@ -85,6 +86,9 @@ async function startServer() {
     }
   };
 
+  // Server-side secure production OTP store mapping (phone number -> { otp, expiresAt })
+  const productionOtpStore = new Map<string, { otp: string; expiresAt: number }>();
+
   // Helper to extract acting user from headers
   const getActingUser = (req: Request): User => {
     const userHeader = req.headers['x-user-id'] as string;
@@ -109,7 +113,13 @@ async function startServer() {
         };
       }
     }
-    // Default fallback to Admin
+    
+    // In production environment, we strictly reject requests without authenticated headers (no admin fallback)
+    if (process.env.NODE_ENV === 'production' || process.env.STRICT_AUTH === 'true') {
+      throw new Error('UNAUTHORIZED: Valid x-user-id header is required for this action.');
+    }
+
+    // Default fallback to Admin only in local development / sandbox environments
     return (
       db.users.find((u) => u.role === 'ADMIN') || {
         id: 'USR-ADMIN-01',
@@ -124,7 +134,7 @@ async function startServer() {
   };
 
   // ---------------- AUTH API ----------------
-  const handleVerifyMobile = (req: Request, res: Response) => {
+  const handleVerifyMobile = async (req: Request, res: Response) => {
     try {
       const mobile = req.body?.mobile || req.query?.mobile;
       const otp = req.body?.otp || req.query?.otp;
@@ -138,7 +148,7 @@ async function startServer() {
         return res.status(400).json({ success: false, code: 'INVALID_MOBILE', error: 'Please enter a valid 10-digit mobile number' });
       }
 
-      // Perform user lookup in local DB and Supabase
+      // Perform user lookup in database (hydrated snapshot)
       let authData;
       try {
         authData = BusinessService.verifyMobile(cleanMobile);
@@ -174,17 +184,27 @@ async function startServer() {
         });
       }
 
+      const isProd = isProductionOtpMode();
+
       // If OTP was provided in request body/query, perform OTP verification
       if (otp !== undefined && otp !== null && String(otp).trim() !== '') {
         const strOtp = String(otp).trim();
-        const isValidDemoOtp = strOtp === '123456' || strOtp === 'DEMO_OTP' || strOtp === '1234' || (process.env.NODE_ENV !== 'production' && /^\d{4,6}$/.test(strOtp));
-        if (!isValidDemoOtp) {
+        const stored = productionOtpStore.get(cleanMobile);
+        const actualOtp = stored ? stored.otp : '';
+        
+        const provider = getOtpProvider();
+        const isValidOtp = provider.verifyOtp(cleanMobile, strOtp, actualOtp);
+
+        if (!isValidOtp) {
           return res.status(401).json({
             success: false,
             code: 'INVALID_OTP',
-            error: 'Invalid OTP. Please enter valid demo OTP (123456 or DEMO_OTP).',
+            error: 'Invalid or expired OTP. Please try again.',
           });
         }
+
+        // Consume used OTP
+        productionOtpStore.delete(cleanMobile);
 
         return res.json({
           success: true,
@@ -198,11 +218,25 @@ async function startServer() {
         });
       }
 
+      // Step 1: Generate high-entropy 6-digit dynamic random OTP
+      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      productionOtpStore.set(cleanMobile, {
+        otp: generatedOtp,
+        expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes expiry
+      });
+
+      // Step 2: Dispatch OTP through active modular Provider
+      const provider = getOtpProvider();
+      const settings = store.getDb().settings;
+      await provider.sendOtp(cleanMobile, generatedOtp, settings);
+
+      console.log(`[AUTH] Secure OTP generated for +91 ${cleanMobile}: ${generatedOtp}`);
+
       // Mobile check success (Step 1)
       return res.json({
         success: true,
-        message: 'OTP sent to mobile number',
-        otpHint: '123456',
+        message: 'OTP sent successfully to mobile number.',
+        otpHint: isProd ? undefined : generatedOtp, // Suppress OTP hint on production to prevent client-side intercept bypasses
         role: authData.user.role,
         user: authData.user,
         customer: authData.customer || null,
@@ -244,14 +278,22 @@ async function startServer() {
       const cleanMobile = normalizeMobile(String(mobile));
       const strOtp = String(otp).trim();
 
-      const isValidDemoOtp = strOtp === '123456' || strOtp === 'DEMO_OTP' || strOtp === '1234' || (process.env.NODE_ENV !== 'production' && /^\d{4,6}$/.test(strOtp));
-      if (!isValidDemoOtp) {
+      const stored = productionOtpStore.get(cleanMobile);
+      const actualOtp = stored ? stored.otp : '';
+
+      const provider = getOtpProvider();
+      const isValidOtp = provider.verifyOtp(cleanMobile, strOtp, actualOtp);
+
+      if (!isValidOtp) {
         return res.status(401).json({
           success: false,
           code: 'INVALID_OTP',
-          error: 'Invalid OTP. Please enter valid demo OTP (123456 or DEMO_OTP).',
+          error: 'Invalid or expired OTP. Please try again.',
         });
       }
+
+      // Consume used OTP
+      productionOtpStore.delete(cleanMobile);
 
       let authData;
       try {
@@ -315,6 +357,14 @@ async function startServer() {
   app.get('/api/verify-otp', handleVerifyOtp);
   app.post('/api/verify-otp/', handleVerifyOtp);
   app.get('/api/verify-otp/', handleVerifyOtp);
+
+  // Endpoint to fetch current OTP configuration for dynamic frontend warning/pre-fills
+  app.get('/api/auth/otp-config', (_req: Request, res: Response) => {
+    return res.json({
+      otpMode: process.env.OTP_MODE || 'demo',
+      demoOtpHint: '123456',
+    });
+  });
 
   // ---------------- DASHBOARD & SUMMARY ----------------
   app.get('/api/dashboard/summary', (_req: Request, res: Response) => {

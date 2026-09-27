@@ -30,6 +30,18 @@ export const MobileOtpLogin: React.FC<{ onLoginSuccess?: () => void }> = ({ onLo
   const [loading, setLoading] = useState(false);
   const [matchedUserName, setMatchedUserName] = useState<string | null>(null);
   const [matchedRole, setMatchedRole] = useState<UserRole | null>(null);
+  const [otpMode, setOtpMode] = useState<'demo' | 'production' | null>(null);
+
+  React.useEffect(() => {
+    fetch('/api/auth/otp-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.otpMode) {
+          setOtpMode(data.otpMode);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Triggered when sending OTP
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -51,13 +63,13 @@ export const MobileOtpLogin: React.FC<{ onLoginSuccess?: () => void }> = ({ onLo
       setMatchedRole(res.user.role);
       
       if (res.user.name === 'New Customer') {
-        setSuccessMsg('New Mobile Number detected! We have instantly registered your account. Please enter the demo OTP below to continue.');
+        setSuccessMsg(res.otpHint ? 'New Mobile Number detected! We have instantly registered your account. Please enter the demo OTP below to continue.' : 'New Mobile Number registered successfully. Please enter the 6-digit OTP code received.');
       } else {
-        setSuccessMsg('Account verified successfully. Please enter the demo OTP below to login.');
+        setSuccessMsg(res.otpHint ? 'Account verified successfully. Please enter the demo OTP below to login.' : 'Account verified. Please enter the 6-digit OTP code received.');
       }
       
       setStep('OTP');
-      setOtp(res.otpHint || '123456'); // Prefilled default for ease of testing
+      setOtp(res.otpHint || ''); // Only pre-fill OTP if hint is returned from server (demo mode)
     } catch (err: any) {
       setError(err.message || 'Verification failed. Please check your mobile number.');
     } finally {
@@ -116,6 +128,18 @@ export const MobileOtpLogin: React.FC<{ onLoginSuccess?: () => void }> = ({ onLo
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-800 py-8 px-6 shadow-2xl rounded-2xl border border-slate-700 sm:px-10">
           
+          {/* Demo/Test OTP Mode Warning */}
+          {otpMode === 'demo' && (
+            <div className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center animate-fade-in">
+              <span className="inline-block text-[10px] font-black uppercase tracking-widest text-amber-400">
+                ⚠️ Demo / Test OTP Mode Active
+              </span>
+              <p className="text-[10px] text-slate-300 mt-1">
+                Use any valid 10-digit mobile number. You can complete verification using the default test code <strong className="text-white">123456</strong>.
+              </p>
+            </div>
+          )}
+
           {/* Notification Messages */}
           {error && (
             <div className="mb-5 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-start gap-2.5 text-rose-300 text-xs animate-fade-in">
