@@ -90,6 +90,9 @@ const getHeaders = (userId?: string): Record<string, string> => {
 
 const BACKEND_PRIMARY_HOSTS = [
   typeof window !== 'undefined' ? window.location.origin : '',
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000` : '',
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : '',
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8080` : '',
 ];
 
 let cachedWorkingHost: string | null = null;
