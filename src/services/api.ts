@@ -89,7 +89,7 @@ const getHeaders = (userId?: string): Record<string, string> => {
 };
 
 const BACKEND_PRIMARY_HOSTS = [
-  'https://ais-pre-ysan7dqet3ily42p5p7rap-958564531601.asia-southeast1.run.app',
+  typeof window !== 'undefined' ? window.location.origin : '',
 ];
 
 let cachedWorkingHost: string | null = null;
