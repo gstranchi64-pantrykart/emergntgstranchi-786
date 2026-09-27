@@ -1,0 +1,8 @@
+{
+  "name": "Remix 2 nd",
+  "description": "Imported from GitHub: gstranchi64-pantrykart/gstranchi64-pantrykart12345",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
