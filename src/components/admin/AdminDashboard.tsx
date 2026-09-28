@@ -75,16 +75,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
   }, []);
 
-  const summary = localSummary;
+  const defaultSummary: DashboardSummary = {
+    totalCustomers: 0,
+    activeCustomers: 0,
+    pantryCustomers: 0,
+    childCustomers: 0,
+    totalProducts: 0,
+    publishedProducts: 0,
+    pendingProducts: 0,
+    totalAvailableStock: 0,
+    lowStockBatches: 0,
+    nearExpiryBatches: 0,
+    expiredBatches: 0,
+    pantryOrdersCount: 0,
+    quickOrdersCount: 0,
+    pendingDeliveriesCount: 0,
+    deliveredOrdersCount: 0,
+    pendingReturnsCount: 0,
+    replacementDueCount: 0,
+    totalPantryCreditUsed: 0,
+    totalPantryCreditAvailable: 0,
+    totalCustomerWalletBalance: 0,
+    totalWalletRecharged: 0,
+    totalWalletAuditDeductions: 0,
+    quickCodCollectionAmount: 0,
+    auditorVisitsCount: 0,
+    pendingAuditorChecksCount: 0,
+  };
 
-  if (!summary) {
-    return (
-      <div className="p-12 flex flex-col justify-center items-center min-h-[400px] bg-white rounded-2xl border border-slate-200">
-        <RefreshCw className="w-8 h-8 animate-spin text-purple-600 mb-3" />
-        <p className="text-sm font-semibold text-slate-700">Loading ERP Control Center...</p>
-      </div>
-    );
-  }
+  const summary = { ...defaultSummary, ...(localSummary || propSummary || {}) };
 
   return (
     <div className="space-y-6">
