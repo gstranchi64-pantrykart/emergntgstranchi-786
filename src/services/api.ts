@@ -27,6 +27,7 @@ import {
   BarcodeLifecycleDetails,
   CustomerPantryHoldingsResponse,
 } from '../types';
+import { handleDirectSupabaseFetch } from '../lib/supabaseFallback';
 
 // Real-Time Event Subscriber
 type RealtimeCallback = (event: { type: string; action?: string; timestamp?: number; payload?: any }) => void;
@@ -358,6 +359,16 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
   // Handle Static Deployment Fallback if backend API is unreachable or returns 404
   if (!res || res.status === 404 || !(res.headers.get('content-type') || '').includes('application/json')) {
+    let parsedBody: any = null;
+    try {
+      if (options?.body) parsedBody = JSON.parse(String(options.body));
+    } catch {}
+
+    const directSupabaseResult = await handleDirectSupabaseFetch<T>(url, method, parsedBody);
+    if (directSupabaseResult !== null) {
+      return directSupabaseResult;
+    }
+
     if (url.includes('/api/auth/verify-mobile') || url.includes('/api/auth/verify-otp') || url.includes('/api/verify-mobile') || url.includes('/api/verify-otp')) {
       let bodyObj: any = {};
       try {
