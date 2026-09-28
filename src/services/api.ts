@@ -476,18 +476,13 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
       }
     }
 
-    if (method === 'GET') {
-      console.warn(`[API] Endpoint ${url} returned non-JSON response (${res.status}). Returning empty fallback array/object.`);
-      return ([] as unknown) as T;
-    }
-
     if (!res.ok) {
       if (res.status === 404) {
-        throw new Error(`Endpoint ${url} unavailable (HTTP 404). Please verify backend server is running.`);
+        throw new Error(`Endpoint ${url} unavailable (HTTP 404). Please verify backend Node.js server is running.`);
       }
-      throw new Error(`Server connection issue (HTTP ${res.status}). Please try again.`);
+      throw new Error(`Server connection issue (HTTP ${res.status}). Please verify backend server.`);
     }
-    throw new Error('Server returned non-JSON response. Please try again.');
+    throw new Error('Server returned non-JSON response. Please check server logs.');
   }
 
   const data = await res.json();
