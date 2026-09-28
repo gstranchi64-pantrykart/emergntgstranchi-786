@@ -67,59 +67,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     fetchSummary();
     fetchSupabaseStatus();
 
-    // Safety fallback: Ensure dashboard renders within 2 seconds even on slow networks
-    const fallbackTimer = setTimeout(() => {
-      setLocalSummary((prev) => {
-        if (prev) return prev;
-        return {
-          totalCustomers: 124,
-          activeCustomers: 118,
-          pantryCustomers: 95,
-          childCustomers: 22,
-          totalProducts: 48,
-          publishedProducts: 45,
-          pendingProducts: 3,
-          totalAvailableStock: 1450,
-          lowStockBatches: 3,
-          nearExpiryBatches: 4,
-          expiredBatches: 0,
-          pantryOrdersCount: 140,
-          quickOrdersCount: 75,
-          pendingDeliveriesCount: 6,
-          deliveredOrdersCount: 202,
-          pendingReturnsCount: 2,
-          replacementDueCount: 1,
-          totalPantryCreditUsed: 142500,
-          totalPantryCreditAvailable: 807500,
-          totalCustomerWalletBalance: 125000,
-          totalWalletRecharged: 180000,
-          totalWalletAuditDeductions: 12400,
-          quickCodCollectionAmount: 38500,
-          auditorVisitsCount: 45,
-          pendingAuditorChecksCount: 4,
-        };
-      });
-      setLoading(false);
-    }, 2000);
-
     const unsubscribe = api.subscribeRealtime(() => {
       fetchSummary(true);
-      fetchSupabaseStatus();
     });
     return () => {
-      clearTimeout(fallbackTimer);
       unsubscribe();
     };
   }, []);
 
   const summary = localSummary;
 
-  if (loading || !summary) {
+  if (!summary) {
     return (
       <div className="p-12 flex flex-col justify-center items-center min-h-[400px] bg-white rounded-2xl border border-slate-200">
         <RefreshCw className="w-8 h-8 animate-spin text-purple-600 mb-3" />
-        <p className="text-sm font-semibold text-slate-700">Loading live ERP dashboard metrics...</p>
-        <p className="text-xs text-slate-400 mt-1">Fetching real-time batch inventory, credit limits, and orders</p>
+        <p className="text-sm font-semibold text-slate-700">Loading ERP Control Center...</p>
       </div>
     );
   }
@@ -129,19 +91,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Top Header & Quick Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span>Admin Central Control Center</span>
-            {supabaseStatus && supabaseStatus.connected ? (
-              <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-bold flex items-center gap-1 border border-emerald-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Supabase Connected ({supabaseStatus.projectRef})</span>
-                {supabaseStatus.latencyMs ? <span className="text-[10px] opacity-75 font-mono">({supabaseStatus.latencyMs}ms)</span> : null}
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 font-semibold">
-                Live Database
-              </span>
-            )}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Real-time batch-wise inventory, Pantry credit tracking, quick orders, and auditor logs.

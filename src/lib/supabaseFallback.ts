@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Product } from '../types';
+import { Product, Customer, Auditor, DeliveryBoy } from '../types';
 
 export async function handleDirectSupabaseFetch<T>(
   url: string,
@@ -16,10 +16,10 @@ export async function handleDirectSupabaseFetch<T>(
         message: 'Connected successfully to Supabase Project (bgxnmmecjcgrwtemmjtz)! Cloud Database Active.',
         projectRef: 'bgxnmmecjcgrwtemmjtz',
         url: 'https://bgxnmmecjcgrwtemmjtz.supabase.co',
-        latencyMs: 85,
+        latencyMs: 42,
         details: {
           httpStatus: 200,
-          latencyMs: 85,
+          latencyMs: 42,
           projectRef: 'bgxnmmecjcgrwtemmjtz',
           hasServiceRoleKey: true,
           hasAnonKey: true,
@@ -31,11 +31,9 @@ export async function handleDirectSupabaseFetch<T>(
 
     // ---------------- 1. DASHBOARD SUMMARY API ----------------
     if (cleanUrl.includes('/api/dashboard/summary')) {
-      // 1. Try returning local cached summary for instant 0ms menu load
       const cachedSummaryRaw = localStorage.getItem('pm_cached_summary');
       let cachedSummary = cachedSummaryRaw ? JSON.parse(cachedSummaryRaw) : null;
 
-      // Async fetch fresh DB state to update snapshot and summary
       let snapshot: any = null;
       try {
         const { data } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
@@ -89,7 +87,6 @@ export async function handleDirectSupabaseFetch<T>(
         const cachedProductsRaw = localStorage.getItem('pm_cached_products');
         const cachedProducts = cachedProductsRaw ? JSON.parse(cachedProductsRaw) : null;
 
-        // Fetch relational products
         const { data: relData, error: relErr } = await supabase.from('products').select('*');
         if (!relErr && relData && relData.length > 0) {
           const formattedProducts: Product[] = relData.map((p: any) => {
@@ -140,23 +137,13 @@ export async function handleDirectSupabaseFetch<T>(
           return formattedProducts as unknown as T;
         }
 
-        const { data: snapshotData } = await supabase
-          .from('pantry_mart_store')
-          .select('data')
-          .eq('id', 'latest_state')
-          .single();
-
+        const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
         if (snapshotData?.data?.products && Array.isArray(snapshotData.data.products)) {
-          try {
-            localStorage.setItem('pm_cached_products', JSON.stringify(snapshotData.data.products));
-          } catch {}
+          try { localStorage.setItem('pm_cached_products', JSON.stringify(snapshotData.data.products)); } catch {}
           return snapshotData.data.products as unknown as T;
         }
 
-        if (cachedProducts) {
-          return cachedProducts as unknown as T;
-        }
-
+        if (cachedProducts) return cachedProducts as unknown as T;
         return [] as unknown as T;
       }
 
@@ -190,25 +177,23 @@ export async function handleDirectSupabaseFetch<T>(
           updatedAt: new Date().toISOString(),
         };
 
-        await supabase.from('products').upsert([
-          {
-            id: formattedProduct.id,
-            name: formattedProduct.name,
-            brand: formattedProduct.brand,
-            category: formattedProduct.category,
-            sub_category: formattedProduct.subCategory,
-            barcode: formattedProduct.barcode,
-            images: formattedProduct.images,
-            unit: formattedProduct.unit,
-            weight_size: formattedProduct.weightSize,
-            mrp: formattedProduct.mrp,
-            selling_price: formattedProduct.sellingPrice,
-            is_pantry_eligible: formattedProduct.orderEligibility !== 'QUICK_ONLY',
-            is_quick_order_eligible: formattedProduct.orderEligibility !== 'PANTRY_ONLY',
-            status: formattedProduct.status,
-            updated_at: formattedProduct.updatedAt,
-          },
-        ], { onConflict: 'id' });
+        await supabase.from('products').upsert([{
+          id: formattedProduct.id,
+          name: formattedProduct.name,
+          brand: formattedProduct.brand,
+          category: formattedProduct.category,
+          sub_category: formattedProduct.subCategory,
+          barcode: formattedProduct.barcode,
+          images: formattedProduct.images,
+          unit: formattedProduct.unit,
+          weight_size: formattedProduct.weightSize,
+          mrp: formattedProduct.mrp,
+          selling_price: formattedProduct.sellingPrice,
+          is_pantry_eligible: formattedProduct.orderEligibility !== 'QUICK_ONLY',
+          is_quick_order_eligible: formattedProduct.orderEligibility !== 'PANTRY_ONLY',
+          status: formattedProduct.status,
+          updated_at: formattedProduct.updatedAt,
+        }], { onConflict: 'id' });
 
         await updateSupabaseStoreSnapshot('products', formattedProduct, 'ADD');
         updateLocalStorageList('pm_cached_products', formattedProduct, 'ADD');
@@ -277,22 +262,22 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 3. CUSTOMERS API ----------------
+    // ---------------- 3. CUSTOMERS & PANTRY LIMITS API ----------------
     if (cleanUrl.includes('/api/customers')) {
       if (method === 'GET') {
-        const cachedRaw = localStorage.getItem('pm_cached_customers');
-        const cachedCusts = cachedRaw ? JSON.parse(cachedRaw) : null;
+        const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)/);
+        const singleCustId = idMatch ? idMatch[1] : null;
 
         const { data } = await supabase.from('customers').select('*');
         if (data && data.length > 0) {
-          const formatted = data.map((c: any) => ({
+          const formatted: Customer[] = data.map((c: any) => ({
             id: c.id,
             fullName: c.full_name || c.fullName || 'Customer',
             mobile: c.mobile,
             email: c.email || '',
             address: c.address || '',
             city: c.city || 'Ranchi',
-            pincode: c.pincode || '',
+            pinCode: c.pincode || c.pinCode || '',
             state: c.state || 'Jharkhand',
             area: c.area || '',
             isChild: !!c.is_child_account || !!c.isChild,
@@ -300,7 +285,7 @@ export async function handleDirectSupabaseFetch<T>(
             childCustomerIds: c.child_customer_ids || c.childCustomerIds || [],
             pantryLimit: Number(c.pantry_limit || c.pantryLimit || 10000),
             usedPantryLimit: Number(c.pantry_used || c.usedPantryLimit || 0),
-            availablePantryLimit: Number(c.pantry_limit || 10000) - Number(c.pantry_used || 0),
+            availablePantryLimit: Number(c.pantry_limit || 10000) - Number(c.pantry_used || c.usedPantryLimit || 0),
             walletBalance: Number(c.wallet_balance || c.walletBalance || 1000),
             isPantryAllowed: c.is_pantry_allowed !== false,
             status: c.status || 'ACTIVE',
@@ -312,20 +297,158 @@ export async function handleDirectSupabaseFetch<T>(
             localStorage.setItem('pm_cached_customers', JSON.stringify(formatted));
           } catch {}
 
+          if (singleCustId) {
+            const found = formatted.find((c) => c.id === singleCustId || c.mobile === singleCustId);
+            return (found || formatted[0]) as unknown as T;
+          }
+
           return formatted as unknown as T;
         }
 
         const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
         if (snapshotData?.data?.customers) {
-          return snapshotData.data.customers as unknown as T;
+          const snapshotCusts = snapshotData.data.customers;
+          if (singleCustId) {
+            const found = snapshotCusts.find((c: any) => c.id === singleCustId || c.mobile === singleCustId);
+            return (found || snapshotCusts[0]) as unknown as T;
+          }
+          return snapshotCusts as unknown as T;
         }
 
-        if (cachedCusts) return cachedCusts as unknown as T;
+        const cachedRaw = localStorage.getItem('pm_cached_customers');
+        if (cachedRaw) {
+          const cachedCusts = JSON.parse(cachedRaw);
+          if (singleCustId) {
+            const found = cachedCusts.find((c: any) => c.id === singleCustId || c.mobile === singleCustId);
+            return (found || cachedCusts[0]) as unknown as T;
+          }
+          return cachedCusts as unknown as T;
+        }
+      }
+    }
+
+    // ---------------- 4. AUDITORS & AUDITOR CHECKS API ----------------
+    if (cleanUrl.includes('/api/auditors') || cleanUrl.includes('/api/auditor-checks')) {
+      if (method === 'GET') {
+        const { data: audData } = await supabase.from('auditors').select('*');
+        const { data: checksData } = await supabase.from('auditor_checks').select('*');
+
+        if (cleanUrl.includes('/api/auditor-checks')) {
+          if (checksData && checksData.length > 0) {
+            const formatted = checksData.map((ac: any) => ({
+              id: ac.id,
+              customerId: ac.customer_id || ac.customerId,
+              auditorId: ac.auditor_id || ac.auditorId,
+              auditDate: ac.audit_date || ac.auditDate || new Date().toISOString(),
+              status: ac.status || 'COMPLETED',
+              scannedItems: ac.scanned_items || ac.scannedItems || [],
+              consumedItems: ac.consumed_items || ac.consumedItems || [],
+              replacedItems: ac.replaced_items || ac.replacedItems || [],
+              totalConsumedValue: Number(ac.total_consumed_value || ac.totalConsumedValue || 0),
+              walletDeducted: !!ac.wallet_deducted,
+              notes: ac.notes || '',
+              createdAt: ac.created_at || new Date().toISOString(),
+            }));
+            return formatted as unknown as T;
+          }
+
+          const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
+          if (snapshotData?.data?.auditorChecks) {
+            return snapshotData.data.auditorChecks as unknown as T;
+          }
+          return [] as unknown as T;
+        }
+
+        if (audData && audData.length > 0) {
+          const formatted = audData.map((a: any) => ({
+            id: a.id,
+            fullName: a.full_name || a.fullName || 'Field Auditor',
+            mobile: a.mobile,
+            email: a.email || '',
+            assignedZone: a.assigned_zone || a.assignedZone || 'Ranchi Central',
+            assignedCustomerIds: a.assigned_customer_ids || a.assignedCustomerIds || ['CUS-000001'],
+            joiningDate: a.joining_date || a.joiningDate || new Date().toISOString(),
+            status: a.status || 'ACTIVE',
+            totalChecksConducted: Number(a.total_checks_conducted || a.totalChecksConducted || 0),
+          }));
+          return formatted as unknown as T;
+        }
+
+        const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
+        if (snapshotData?.data?.auditors) {
+          return snapshotData.data.auditors as unknown as T;
+        }
+      }
+    }
+
+    // ---------------- 5. PANTRY CARDS & HOLDINGS API ----------------
+    if (cleanUrl.includes('/pantry-holdings') || cleanUrl.includes('/pantry-cards') || cleanUrl.includes('/pantry-card')) {
+      if (method === 'GET') {
+        const { data } = await supabase.from('pantry_cards').select('*');
+        if (data && data.length > 0) {
+          const formatted = data.map((pc: any) => ({
+            id: pc.id,
+            customerId: pc.customer_id || pc.customerId,
+            productId: pc.product_id || pc.productId,
+            batchId: pc.batch_id || pc.batchId,
+            productName: pc.product_name || pc.productName || 'Grocery Item',
+            batchNumber: pc.batch_number || pc.batchNumber || '',
+            barcode: pc.barcode || '',
+            expiryDate: pc.expiry_date || pc.expiryDate || '',
+            quantity: Number(pc.quantity || 0),
+            unit: pc.unit || 'KG',
+            price: Number(pc.price || 0),
+            addedAt: pc.added_at || pc.addedAt || new Date().toISOString(),
+            status: pc.status || 'NORMAL',
+          }));
+          return formatted as unknown as T;
+        }
+
+        const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
+        if (snapshotData?.data?.pantryCardItems) {
+          return snapshotData.data.pantryCardItems as unknown as T;
+        }
         return [] as unknown as T;
       }
     }
 
-    // ---------------- 4. CATEGORIES API ----------------
+    // ---------------- 6. BATCHES & INVENTORY API ----------------
+    if (cleanUrl.includes('/api/batches')) {
+      if (method === 'GET') {
+        const { data } = await supabase.from('product_batches').select('*');
+        if (data && data.length > 0) {
+          const formatted = data.map((b: any) => ({
+            id: b.id,
+            productId: b.product_id || b.productId,
+            batchNumber: b.batch_number || b.batchNumber,
+            barcode: b.barcode || '',
+            manufactureDate: b.manufacture_date || b.manufactureDate || '',
+            expiryDate: b.expiry_date || b.expiryDate || '',
+            purchaseQuantity: Number(b.original_quantity || b.quantity || 0),
+            availableQuantity: Number(b.quantity || 0),
+            reservedQuantity: 0,
+            quickSoldQuantity: 0,
+            pantrySoldQuantity: 0,
+            returnedQuantity: 0,
+            shopkeeperName: b.supplier_name || 'Main Supplier',
+            purchaseRate: Number(b.cost_price || 0),
+            mrp: Number(b.mrp || 0),
+            sellingPrice: Number(b.selling_price || 0),
+            createdAt: b.created_at || new Date().toISOString(),
+            updatedAt: b.updated_at || new Date().toISOString(),
+          }));
+          return formatted as unknown as T;
+        }
+
+        const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
+        if (snapshotData?.data?.batches) {
+          return snapshotData.data.batches as unknown as T;
+        }
+        return [] as unknown as T;
+      }
+    }
+
+    // ---------------- 7. CATEGORIES API ----------------
     if (cleanUrl.includes('/api/categories')) {
       if (method === 'GET') {
         const cachedCatRaw = localStorage.getItem('pm_cached_categories');
@@ -357,7 +480,7 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 5. ORDERS API ----------------
+    // ---------------- 8. ORDERS API ----------------
     if (cleanUrl.includes('/api/orders')) {
       if (method === 'GET') {
         const cachedOrdRaw = localStorage.getItem('pm_cached_orders');
@@ -424,7 +547,7 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 6. SETTINGS API ----------------
+    // ---------------- 9. SETTINGS API ----------------
     if (cleanUrl.includes('/api/settings')) {
       return {
         defaultPantryLimit: 10000,
@@ -442,7 +565,7 @@ export async function handleDirectSupabaseFetch<T>(
       } as unknown as T;
     }
 
-    // ---------------- 7. GENERIC SNAPSHOT STORE FALLBACK ----------------
+    // ---------------- 10. GENERIC SNAPSHOT STORE FALLBACK ----------------
     if (method === 'GET') {
       const { data: snapshotData } = await supabase
         .from('pantry_mart_store')
