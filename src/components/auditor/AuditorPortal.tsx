@@ -981,43 +981,7 @@ export const AuditorPortal: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsAddHouseModalOpen(true)}
-            className="px-3 py-2.5 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-cyan-100 transition shrink-0 cursor-pointer"
-            title="Register New Household or Assign to Route"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>+ House</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const next = !showAllHouses;
-              setShowAllHouses(next);
-              let filtered = allRegisteredCustomers;
-              if (!next && currentAuditorProfile) {
-                const assignedIds = new Set(currentAuditorProfile.assignedCustomerIds || []);
-                const matches = allRegisteredCustomers.filter(
-                  (c) => assignedIds.has(c.id) || (c as any).assignedAuditorId === currentAuditorProfile.id
-                );
-                if (matches.length > 0) {
-                  filtered = matches;
-                }
-              }
-              setCustomers(filtered);
-              if (filtered.length > 0 && !filtered.some((c) => c.id === selectedCustomerId)) {
-                setSelectedCustomerId(filtered[0].id);
-              }
-            }}
-            className={`px-2.5 py-2.5 rounded-xl text-[11px] font-bold border transition shrink-0 cursor-pointer ${
-              showAllHouses
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-            title={showAllHouses ? 'Click to show only assigned route' : 'Click to show all registered houses'}
-          >
-            {showAllHouses ? 'All Houses' : 'My Route'}
-          </button>
+          {/* House and All Houses buttons hidden as requested */}
 
           <button
             onClick={() => fetchCustomersAndPastAudits()}
@@ -1091,29 +1055,8 @@ export const AuditorPortal: React.FC = () => {
           <div className="space-y-1">
             <h3 className="text-xl font-black text-slate-900">No Household Selected</h3>
             <p className="text-slate-500 max-w-md mx-auto text-xs font-medium">
-              Select an assigned household above, or click below to enroll a new house / link any registered household to your audit route.
+              Please select an assigned household from your route dropdown above to inspect pantry items.
             </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              onClick={() => setIsAddHouseModalOpen(true)}
-              className="px-5 py-2.5 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-cyan-100 transition cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>+ Register / Link Household</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowAllHouses(true);
-                setCustomers(allRegisteredCustomers);
-                if (allRegisteredCustomers.length > 0) {
-                  setSelectedCustomerId(allRegisteredCustomers[0].id);
-                }
-              }}
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition cursor-pointer"
-            >
-              <span>Browse All Registered Houses ({allRegisteredCustomers.length})</span>
-            </button>
           </div>
         </div>
       ) : (

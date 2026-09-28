@@ -479,19 +479,23 @@ export const api = {
   subscribeRealtime: (callback: RealtimeCallback) => {
     subscribers.add(callback);
 
-    // 1. Polling for real-time updates every 5 seconds (fast, highly optimized, server-safe, 0% container connection leaks)
+    // 1. Gentle background sync every 30 seconds (prevents 5-second UI flicker/blinking while preserving multi-device updates)
     const intervalId = setInterval(() => {
       try {
         callback({ type: 'DATABASE_MUTATION', action: 'PERIODIC_POLL', timestamp: Date.now() });
       } catch {}
-    }, 5000);
+    }, 30000);
 
-    // 2. Refresh instantly when tab gains focus or lock screen unlocks
+    // 2. Debounced refresh when tab gains focus or lock screen unlocks
+    let focusTimeout: any = null;
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        try {
-          callback({ type: 'DATABASE_MUTATION', action: 'WINDOW_FOCUS', timestamp: Date.now() });
-        } catch {}
+        clearTimeout(focusTimeout);
+        focusTimeout = setTimeout(() => {
+          try {
+            callback({ type: 'DATABASE_MUTATION', action: 'WINDOW_FOCUS', timestamp: Date.now() });
+          } catch {}
+        }, 500);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -502,6 +506,7 @@ export const api = {
     return () => {
       subscribers.delete(callback);
       clearInterval(intervalId);
+      clearTimeout(focusTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (typeof window !== 'undefined') {
         window.removeEventListener('focus', handleVisibilityChange);

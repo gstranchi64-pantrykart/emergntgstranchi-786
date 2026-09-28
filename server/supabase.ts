@@ -1,6 +1,23 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseStatusInfo, SupabaseSyncResult } from '../src/types';
 
+// Helper to perform fetch with strict timeout to prevent hangs
+export async function fetchWithTimeout(url: any, options: RequestInit = {}, timeoutMs: number = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
 // Default Supabase project credentials provided from environment variables
 export const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const DEFAULT_SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
@@ -41,6 +58,9 @@ class SupabaseService {
           auth: {
             persistSession: false,
             autoRefreshToken: false,
+          },
+          global: {
+            fetch: (url, options) => fetchWithTimeout(url, options, 5000),
           },
         });
       }
@@ -95,13 +115,13 @@ class SupabaseService {
       let postgrestVerified = false;
       if (testSecretKey) {
         try {
-          const restRes = await fetch(`${baseUrl}/rest/v1/`, {
+          const restRes = await fetchWithTimeout(`${baseUrl}/rest/v1/`, {
             method: 'GET',
             headers: {
               apikey: testSecretKey,
               Authorization: `Bearer ${testSecretKey}`,
             },
-          });
+          }, 4000);
           if (restRes.ok || restRes.status === 200) {
             postgrestVerified = true;
           }
@@ -112,13 +132,13 @@ class SupabaseService {
 
       // 2. Test Supabase Auth health endpoint
       const authEndpoint = `${baseUrl}/auth/v1/health`;
-      const authRes = await fetch(authEndpoint, {
+      const authRes = await fetchWithTimeout(authEndpoint, {
         method: 'GET',
         headers: {
           apikey: testAnonKey || testSecretKey,
           Authorization: `Bearer ${testAnonKey || testSecretKey}`,
         },
-      });
+      }, 4000);
 
       const latencyMs = Date.now() - startTime;
       this.lastTestedLatency = latencyMs;

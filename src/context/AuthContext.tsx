@@ -96,13 +96,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     try {
       const authData = await api.verifyMobile(user.mobile);
-      setUser(authData.user);
-      setCustomer(authData.customer || null);
-      setDeliveryBoy(authData.deliveryBoy || null);
-      setAuditor(authData.auditor || null);
-
-      localStorage.setItem('pm_user', JSON.stringify(authData.user));
-      if (authData.customer) localStorage.setItem('pm_customer', JSON.stringify(authData.customer));
+      if (authData && authData.user) {
+        if (JSON.stringify(user) !== JSON.stringify(authData.user)) {
+          setUser(authData.user);
+          localStorage.setItem('pm_user', JSON.stringify(authData.user));
+        }
+        if (authData.customer && JSON.stringify(customer) !== JSON.stringify(authData.customer)) {
+          setCustomer(authData.customer);
+          localStorage.setItem('pm_customer', JSON.stringify(authData.customer));
+        }
+        if (authData.deliveryBoy && JSON.stringify(deliveryBoy) !== JSON.stringify(authData.deliveryBoy)) {
+          setDeliveryBoy(authData.deliveryBoy);
+          localStorage.setItem('pm_delivery_boy', JSON.stringify(authData.deliveryBoy));
+        }
+        if (authData.auditor && JSON.stringify(auditor) !== JSON.stringify(authData.auditor)) {
+          setAuditor(authData.auditor);
+          localStorage.setItem('pm_auditor', JSON.stringify(authData.auditor));
+        }
+      }
     } catch (err) {
       console.error('Error refreshing user data:', err);
     }
