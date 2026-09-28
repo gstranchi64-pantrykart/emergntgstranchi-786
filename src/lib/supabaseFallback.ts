@@ -31,6 +31,11 @@ export async function handleDirectSupabaseFetch<T>(
 
     // ---------------- 1. DASHBOARD SUMMARY API ----------------
     if (cleanUrl.includes('/api/dashboard/summary')) {
+      // 1. Try returning local cached summary for instant 0ms menu load
+      const cachedSummaryRaw = localStorage.getItem('pm_cached_summary');
+      let cachedSummary = cachedSummaryRaw ? JSON.parse(cachedSummaryRaw) : null;
+
+      // Async fetch fresh DB state to update snapshot and summary
       let snapshot: any = null;
       try {
         const { data } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
@@ -43,44 +48,48 @@ export async function handleDirectSupabaseFetch<T>(
       const btchs: any[] = snapshot?.batches || [];
       const auds: any[] = snapshot?.auditors || [];
 
-      const summary = {
-        totalCustomers: custs.length > 0 ? custs.length : 124,
-        activeCustomers: custs.length > 0 ? custs.filter((c: any) => c.status !== 'INACTIVE').length : 118,
-        pantryCustomers: custs.length > 0 ? custs.filter((c: any) => c.hasPantryCard || c.has_pantry_card).length : 95,
-        childCustomers: custs.length > 0 ? custs.filter((c: any) => c.isChild || c.is_child_account).length : 22,
-        totalProducts: prods.length > 0 ? prods.length : 48,
-        publishedProducts: prods.length > 0 ? prods.filter((p: any) => p.status === 'PUBLISHED' || p.status === 'ACTIVE').length : 45,
-        pendingProducts: prods.length > 0 ? prods.filter((p: any) => p.status === 'DRAFT' || p.status === 'PENDING_APPROVAL').length : 3,
-        totalAvailableStock: btchs.length > 0 ? btchs.reduce((acc: number, b: any) => acc + (Number(b.availableQuantity || b.quantity || 0)), 0) : 1450,
-        lowStockBatches: btchs.length > 0 ? btchs.filter((b: any) => (Number(b.availableQuantity || b.quantity || 0)) <= 5).length : 3,
-        nearExpiryBatches: btchs.length > 0 ? btchs.filter((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() - Date.now() < 30 * 86400000).length : 4,
-        expiredBatches: btchs.length > 0 ? btchs.filter((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() < Date.now()).length : 0,
-        pantryOrdersCount: ords.length > 0 ? ords.filter((o: any) => (o.orderType || o.order_type) === 'PANTRY').length : 140,
-        quickOrdersCount: ords.length > 0 ? ords.filter((o: any) => (o.orderType || o.order_type) === 'QUICK' || (o.orderType || o.order_type) === 'QUICK_COD').length : 75,
-        pendingDeliveriesCount: ords.length > 0 ? ords.filter((o: any) => (o.orderStatus || o.status || o.order_status) === 'PLACED' || (o.orderStatus || o.status || o.order_status) === 'DISPATCHED').length : 6,
-        deliveredOrdersCount: ords.length > 0 ? ords.filter((o: any) => (o.orderStatus || o.status || o.order_status) === 'DELIVERED').length : 202,
-        pendingReturnsCount: 2,
-        replacementDueCount: 1,
-        totalPantryCreditUsed: custs.length > 0 ? custs.reduce((acc: number, c: any) => acc + Number(c.usedPantryLimit || c.pantry_used || 0), 0) : 142500,
-        totalPantryCreditAvailable: custs.length > 0 ? custs.reduce((acc: number, c: any) => acc + Number(c.availablePantryLimit || c.pantry_limit || 10000), 0) : 807500,
-        totalCustomerWalletBalance: custs.length > 0 ? custs.reduce((acc: number, c: any) => acc + Number(c.walletBalance || c.wallet_balance || 0), 0) : 125000,
-        totalWalletRecharged: 180000,
-        totalWalletAuditDeductions: 12400,
-        quickCodCollectionAmount: 38500,
-        auditorVisitsCount: auds.length > 0 ? auds.reduce((acc: number, a: any) => acc + Number(a.totalChecksConducted || 0), 0) : 45,
-        pendingAuditorChecksCount: 4,
+      const freshSummary = {
+        totalCustomers: custs.length,
+        activeCustomers: custs.filter((c: any) => c.status !== 'INACTIVE').length,
+        pantryCustomers: custs.filter((c: any) => c.hasPantryCard || c.has_pantry_card).length,
+        childCustomers: custs.filter((c: any) => c.isChild || c.is_child_account).length,
+        totalProducts: prods.length,
+        publishedProducts: prods.filter((p: any) => p.status === 'PUBLISHED' || p.status === 'ACTIVE').length,
+        pendingProducts: prods.filter((p: any) => p.status === 'DRAFT' || p.status === 'PENDING_APPROVAL').length,
+        totalAvailableStock: btchs.reduce((acc: number, b: any) => acc + (Number(b.availableQuantity || b.quantity || 0)), 0),
+        lowStockBatches: btchs.filter((b: any) => (Number(b.availableQuantity || b.quantity || 0)) <= 5).length,
+        nearExpiryBatches: btchs.filter((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() - Date.now() < 30 * 86400000).length,
+        expiredBatches: btchs.filter((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() < Date.now()).length,
+        pantryOrdersCount: ords.filter((o: any) => (o.orderType || o.order_type) === 'PANTRY').length,
+        quickOrdersCount: ords.filter((o: any) => (o.orderType || o.order_type) === 'QUICK' || (o.orderType || o.order_type) === 'QUICK_COD').length,
+        pendingDeliveriesCount: ords.filter((o: any) => (o.orderStatus || o.status || o.order_status) === 'PLACED' || (o.orderStatus || o.status || o.order_status) === 'DISPATCHED').length,
+        deliveredOrdersCount: ords.filter((o: any) => (o.orderStatus || o.status || o.order_status) === 'DELIVERED').length,
+        pendingReturnsCount: 0,
+        replacementDueCount: 0,
+        totalPantryCreditUsed: custs.reduce((acc: number, c: any) => acc + Number(c.usedPantryLimit || c.pantry_used || 0), 0),
+        totalPantryCreditAvailable: custs.reduce((acc: number, c: any) => acc + Number(c.availablePantryLimit || c.pantry_limit || 10000), 0),
+        totalCustomerWalletBalance: custs.reduce((acc: number, c: any) => acc + Number(c.walletBalance || c.wallet_balance || 0), 0),
+        totalWalletRecharged: 0,
+        totalWalletAuditDeductions: 0,
+        quickCodCollectionAmount: 0,
+        auditorVisitsCount: auds.reduce((acc: number, a: any) => acc + Number(a.totalChecksConducted || 0), 0),
+        pendingAuditorChecksCount: 0,
       };
 
       try {
-        localStorage.setItem('pm_cached_summary', JSON.stringify(summary));
+        localStorage.setItem('pm_cached_summary', JSON.stringify(freshSummary));
       } catch {}
 
-      return summary as unknown as T;
+      return (cachedSummary || freshSummary) as unknown as T;
     }
 
     // ---------------- 2. PRODUCTS API ----------------
     if (cleanUrl.endsWith('/api/products') || cleanUrl.includes('/api/products')) {
       if (method === 'GET') {
+        const cachedProductsRaw = localStorage.getItem('pm_cached_products');
+        const cachedProducts = cachedProductsRaw ? JSON.parse(cachedProductsRaw) : null;
+
+        // Fetch relational products
         const { data: relData, error: relErr } = await supabase.from('products').select('*');
         if (!relErr && relData && relData.length > 0) {
           const formattedProducts: Product[] = relData.map((p: any) => {
@@ -137,16 +146,15 @@ export async function handleDirectSupabaseFetch<T>(
           .eq('id', 'latest_state')
           .single();
 
-        if (snapshotData?.data?.products && Array.isArray(snapshotData.data.products) && snapshotData.data.products.length > 0) {
+        if (snapshotData?.data?.products && Array.isArray(snapshotData.data.products)) {
           try {
             localStorage.setItem('pm_cached_products', JSON.stringify(snapshotData.data.products));
           } catch {}
           return snapshotData.data.products as unknown as T;
         }
 
-        const cached = localStorage.getItem('pm_cached_products');
-        if (cached) {
-          try { return JSON.parse(cached) as T; } catch {}
+        if (cachedProducts) {
+          return cachedProducts as unknown as T;
         }
 
         return [] as unknown as T;
@@ -272,6 +280,9 @@ export async function handleDirectSupabaseFetch<T>(
     // ---------------- 3. CUSTOMERS API ----------------
     if (cleanUrl.includes('/api/customers')) {
       if (method === 'GET') {
+        const cachedRaw = localStorage.getItem('pm_cached_customers');
+        const cachedCusts = cachedRaw ? JSON.parse(cachedRaw) : null;
+
         const { data } = await supabase.from('customers').select('*');
         if (data && data.length > 0) {
           const formatted = data.map((c: any) => ({
@@ -309,16 +320,17 @@ export async function handleDirectSupabaseFetch<T>(
           return snapshotData.data.customers as unknown as T;
         }
 
-        const cached = localStorage.getItem('pm_cached_customers');
-        if (cached) {
-          try { return JSON.parse(cached) as T; } catch {}
-        }
+        if (cachedCusts) return cachedCusts as unknown as T;
+        return [] as unknown as T;
       }
     }
 
     // ---------------- 4. CATEGORIES API ----------------
     if (cleanUrl.includes('/api/categories')) {
       if (method === 'GET') {
+        const cachedCatRaw = localStorage.getItem('pm_cached_categories');
+        const cachedCategories = cachedCatRaw ? JSON.parse(cachedCatRaw) : null;
+
         const { data } = await supabase.from('categories').select('*');
         if (data && data.length > 0) {
           const formattedCategories = data.map((c: any) => ({
@@ -340,16 +352,17 @@ export async function handleDirectSupabaseFetch<T>(
           return snapshotData.data.categories as unknown as T;
         }
 
-        const cachedCat = localStorage.getItem('pm_cached_categories');
-        if (cachedCat) {
-          try { return JSON.parse(cachedCat) as T; } catch {}
-        }
+        if (cachedCategories) return cachedCategories as unknown as T;
+        return [] as unknown as T;
       }
     }
 
     // ---------------- 5. ORDERS API ----------------
     if (cleanUrl.includes('/api/orders')) {
       if (method === 'GET') {
+        const cachedOrdRaw = localStorage.getItem('pm_cached_orders');
+        const cachedOrders = cachedOrdRaw ? JSON.parse(cachedOrdRaw) : null;
+
         const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
         if (data && data.length > 0) {
           const formattedOrders = data.map((o: any) => ({
@@ -382,10 +395,8 @@ export async function handleDirectSupabaseFetch<T>(
           return snapshotData.data.orders as unknown as T;
         }
 
-        const cachedOrders = localStorage.getItem('pm_cached_orders');
-        if (cachedOrders) {
-          try { return JSON.parse(cachedOrders) as T; } catch {}
-        }
+        if (cachedOrders) return cachedOrders as unknown as T;
+        return [] as unknown as T;
       }
 
       if (method === 'POST' && body) {
