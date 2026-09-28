@@ -88,12 +88,16 @@ const getHeaders = (userId?: string): Record<string, string> => {
   return headers;
 };
 
-const BACKEND_PRIMARY_HOSTS = [
-  typeof window !== 'undefined' ? window.location.origin : '',
-  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000` : '',
-  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : '',
-  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8080` : '',
-];
+const isLocalDev =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const BACKEND_PRIMARY_HOSTS = isLocalDev
+  ? [
+      typeof window !== 'undefined' ? window.location.origin : '',
+      typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000` : '',
+    ]
+  : [typeof window !== 'undefined' ? window.location.origin : ''];
 
 let cachedWorkingHost: string | null = null;
 
@@ -314,7 +318,22 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
   for (const targetUrl of candidateUrls) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s fast timeout to prevent frozen UI
+
+      const fetchOpts = {
+        ...options,
+        signal: controller.signal,
+        cache: 'no-store' as RequestCache,
+        headers: {
+          ...getHeaders(),
+          ...(options?.headers || {}),
+        },
+      };
+
       const response = await fetch(targetUrl, fetchOpts);
+      clearTimeout(timeoutId);
+
       const ct = response.headers.get('content-type') || '';
       
       if ((response.status === 404 || !ct.includes('application/json')) && targetUrl !== candidateUrls[candidateUrls.length - 1]) {
