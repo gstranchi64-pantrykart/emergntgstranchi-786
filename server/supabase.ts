@@ -18,11 +18,11 @@ export async function fetchWithTimeout(url: any, options: RequestInit = {}, time
   }
 }
 
-// Default Supabase project credentials provided from environment variables
-export const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || '';
-export const DEFAULT_SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
-export const DEFAULT_SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-export const DEFAULT_PROJECT_REF = process.env.SUPABASE_PROJECT_REF || '';
+// Default Supabase project credentials provided from environment variables or production defaults
+export const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || 'https://bgxnmmecjcgrwtemmjtz.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJneG5tbWVjamNncnd0ZW1tanR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMzgwNTgsImV4cCI6MjEwNTcxNDA1OH0.1BEmrzrTZuM7jyyVw8-qp8JjKfuk1cB4oDtpNih43o8';
+export const DEFAULT_SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJneG5tbWVjamNncnd0ZW1tanR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDEzODA1OCwiZXhwIjoyMTA1NzE0MDU4fQ.dMVk2v3wdELMzAwAP80yuATN0RL9ud6WgJlIZCVimYQ';
+export const DEFAULT_PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'bgxnmmecjcgrwtemmjtz';
 export const DEFAULT_DB_URL = process.env.SUPABASE_DB_URL || '';
 
 class SupabaseService {
