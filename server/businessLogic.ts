@@ -1599,6 +1599,27 @@ export class BusinessService {
     return product;
   }
 
+  static deleteProduct(id: string, adminUser: User): { success: boolean; message: string; productId: string } {
+    const db = store.getDb();
+    const index = db.products.findIndex((p) => p.id === id);
+    if (index === -1) {
+      throw new Error(`Product ${id} not found.`);
+    }
+    const [deleted] = db.products.splice(index, 1);
+
+    this.logAudit({
+      who: adminUser.name,
+      role: adminUser.role,
+      action: 'DELETE_PRODUCT',
+      entity: 'PRODUCT',
+      entityId: id,
+      newValue: `Deleted Product ${deleted.name} (${deleted.barcode})`,
+    });
+
+    store.save();
+    return { success: true, message: `Product ${deleted.name} deleted successfully`, productId: id };
+  }
+
   // ---------------- BATCH INVENTORY & PURCHASE ----------------
   static getBatches(): ProductBatch[] {
     return store.getDb().batches;

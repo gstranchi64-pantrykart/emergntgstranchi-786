@@ -636,7 +636,19 @@ async function startServer() {
     try {
       const user = getActingUser(req);
       const product = BusinessService.updateProduct(req.params.id, req.body, user);
+      broadcastDataChange('UPDATE_PRODUCT', product);
       return res.json(product);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/products/:id', (req: Request, res: Response) => {
+    try {
+      const user = getActingUser(req);
+      const result = BusinessService.deleteProduct(req.params.id, user);
+      broadcastDataChange('DELETE_PRODUCT', result);
+      return res.json(result);
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
     }

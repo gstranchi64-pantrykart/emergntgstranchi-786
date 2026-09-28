@@ -737,6 +737,14 @@ export const api = {
     return result;
   },
 
+  deleteProduct: async (id: string) => {
+    const result = await fetchJson<{ success: boolean; message: string; productId: string }>(`/api/products/${id}`, {
+      method: 'DELETE',
+    });
+    notifyRealtimeMutation('DELETE_PRODUCT', result);
+    return result;
+  },
+
   // Batches & Inventory
   getBatches: async () => {
     return fetchJson<ProductBatch[]>('/api/batches');

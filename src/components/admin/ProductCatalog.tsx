@@ -188,6 +188,19 @@ export const ProductCatalog: React.FC = () => {
     }
   };
 
+  const handleDeleteProduct = async (p: Product) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${p.name}" (Barcode: ${p.barcode})? This action will remove it from the master catalog.`)) {
+      return;
+    }
+    try {
+      await api.deleteProduct(p.id);
+      alert(`Product "${p.name}" deleted successfully!`);
+      fetchProducts();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete product.');
+    }
+  };
+
   const categories = ['ALL', ...Array.from(new Set(products.map((p) => p.category)))];
 
   const filteredProducts = products.filter((p) => {
@@ -415,6 +428,13 @@ export const ProductCatalog: React.FC = () => {
                           title={p.status === 'PUBLISHED' ? 'Deactivate Product' : 'Activate Product'}
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(p)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                          title="Delete Product SKU"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
