@@ -10,7 +10,7 @@ import { User } from './src/types';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // CORS middleware for custom domains & reverse proxy configurations - MUST BE FIRST
   app.use((req, res, next) => {
