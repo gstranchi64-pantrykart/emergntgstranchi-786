@@ -319,7 +319,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   for (const targetUrl of candidateUrls) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s fast timeout to prevent frozen UI
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s generous timeout for production DB queries
 
       const fetchOpts = {
         ...options,
@@ -348,7 +348,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
       }
       break;
     } catch (e: any) {
-      lastError = e;
+      if (e.name === 'AbortError' || (e.message && e.message.includes('aborted'))) {
+        lastError = new Error(`Request to ${url} timed out. Please verify server connection.`);
+      } else {
+        lastError = e;
+      }
     }
   }
 
