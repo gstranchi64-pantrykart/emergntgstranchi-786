@@ -320,7 +320,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   for (const targetUrl of candidateUrls) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s generous timeout for production DB queries
+      const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout for fast static site Supabase fallback
 
       const fetchOpts = {
         ...options,

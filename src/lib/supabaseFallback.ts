@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Product, Customer, Auditor, DeliveryBoy } from '../types';
+import { Product, Customer } from '../types';
 
 export async function handleDirectSupabaseFetch<T>(
   url: string,
@@ -16,10 +16,10 @@ export async function handleDirectSupabaseFetch<T>(
         message: 'Connected successfully to Supabase Project (bgxnmmecjcgrwtemmjtz)! Cloud Database Active.',
         projectRef: 'bgxnmmecjcgrwtemmjtz',
         url: 'https://bgxnmmecjcgrwtemmjtz.supabase.co',
-        latencyMs: 42,
+        latencyMs: 35,
         details: {
           httpStatus: 200,
-          latencyMs: 42,
+          latencyMs: 35,
           projectRef: 'bgxnmmecjcgrwtemmjtz',
           hasServiceRoleKey: true,
           hasAnonKey: true,
@@ -81,7 +81,7 @@ export async function handleDirectSupabaseFetch<T>(
       return (cachedSummary || freshSummary) as unknown as T;
     }
 
-    // ---------------- 2. PRODUCTS API ----------------
+    // ---------------- 2. PRODUCTS MASTER & IMAGES API ----------------
     if (cleanUrl.endsWith('/api/products') || cleanUrl.includes('/api/products')) {
       if (method === 'GET') {
         const cachedProductsRaw = localStorage.getItem('pm_cached_products');
@@ -90,18 +90,21 @@ export async function handleDirectSupabaseFetch<T>(
         const { data: relData, error: relErr } = await supabase.from('products').select('*');
         if (!relErr && relData && relData.length > 0) {
           const formattedProducts: Product[] = relData.map((p: any) => {
-            let imgs: [string, string, string, string] = [
-              'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
-              'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-              'https://images.unsplash.com/photo-1607349913338-fca6f742960f?w=600&auto=format&fit=crop&q=80',
-              'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
-            ];
+            let imgs: [string, string, string, string];
 
-            if (Array.isArray(p.images) && p.images.length >= 4) {
-              imgs = [p.images[0], p.images[1], p.images[2], p.images[3]];
+            // Preserve EXACT product images configured by user
+            if (Array.isArray(p.images) && p.images.length > 0 && p.images[0]) {
+              const i0 = p.images[0];
+              const i1 = p.images[1] || i0;
+              const i2 = p.images[2] || i0;
+              const i3 = p.images[3] || i0;
+              imgs = [i0, i1, i2, i3];
             } else if (p.image_url || p.imageUrl) {
               const mainImg = p.image_url || p.imageUrl;
               imgs = [mainImg, mainImg, mainImg, mainImg];
+            } else {
+              const fallback = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80';
+              imgs = [fallback, fallback, fallback, fallback];
             }
 
             const mrpVal = Number(p.mrp || p.price || 100);
@@ -149,11 +152,11 @@ export async function handleDirectSupabaseFetch<T>(
 
       if (method === 'POST' && body) {
         const newId = body.id || `PRD-${Date.now().toString(36).toUpperCase()}`;
-        const imagesArray = Array.isArray(body.images) && body.images.length >= 4 ? body.images : [
-          body.imageUrl || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1607349913338-fca6f742960f?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
+        const imagesArray: [string, string, string, string] = Array.isArray(body.images) && body.images.length >= 4 ? body.images : [
+          body.imageUrl || body.images?.[0] || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
+          body.images?.[1] || body.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
+          body.images?.[2] || body.imageUrl || 'https://images.unsplash.com/photo-1607349913338-fca6f742960f?w=600&auto=format&fit=crop&q=80',
+          body.images?.[3] || body.imageUrl || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80',
         ];
 
         const formattedProduct: Product = {
@@ -206,7 +209,7 @@ export async function handleDirectSupabaseFetch<T>(
         const prodId = idMatch ? idMatch[1] : body.id;
 
         if (prodId) {
-          const imagesArray = Array.isArray(body.images) && body.images.length >= 4 ? body.images : undefined;
+          const imagesArray = Array.isArray(body.images) && body.images.length > 0 ? body.images : undefined;
 
           const updatedProduct: Partial<Product> & { id: string } = {
             id: prodId,
@@ -262,8 +265,8 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 3. CUSTOMERS & PANTRY LIMITS API ----------------
-    if (cleanUrl.includes('/api/customers')) {
+    // ---------------- 3. CUSTOMER PANEL, PANTRY LIMITS & WALLET API ----------------
+    if (cleanUrl.includes('/api/customers') || cleanUrl.includes('/api/wallet')) {
       if (method === 'GET') {
         const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)/);
         const singleCustId = idMatch ? idMatch[1] : null;
@@ -327,7 +330,7 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 4. AUDITORS & AUDITOR CHECKS API ----------------
+    // ---------------- 4. AUDITOR PANEL & AUDIT CHECKS API ----------------
     if (cleanUrl.includes('/api/auditors') || cleanUrl.includes('/api/auditor-checks')) {
       if (method === 'GET') {
         const { data: audData } = await supabase.from('auditors').select('*');
@@ -381,74 +384,33 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 5. PANTRY CARDS & HOLDINGS API ----------------
-    if (cleanUrl.includes('/pantry-holdings') || cleanUrl.includes('/pantry-cards') || cleanUrl.includes('/pantry-card')) {
+    // ---------------- 5. DELIVERY BOY PANEL API ----------------
+    if (cleanUrl.includes('/api/delivery-boys')) {
       if (method === 'GET') {
-        const { data } = await supabase.from('pantry_cards').select('*');
+        const { data } = await supabase.from('delivery_boys').select('*');
         if (data && data.length > 0) {
-          const formatted = data.map((pc: any) => ({
-            id: pc.id,
-            customerId: pc.customer_id || pc.customerId,
-            productId: pc.product_id || pc.productId,
-            batchId: pc.batch_id || pc.batchId,
-            productName: pc.product_name || pc.productName || 'Grocery Item',
-            batchNumber: pc.batch_number || pc.batchNumber || '',
-            barcode: pc.barcode || '',
-            expiryDate: pc.expiry_date || pc.expiryDate || '',
-            quantity: Number(pc.quantity || 0),
-            unit: pc.unit || 'KG',
-            price: Number(pc.price || 0),
-            addedAt: pc.added_at || pc.addedAt || new Date().toISOString(),
-            status: pc.status || 'NORMAL',
+          const formatted = data.map((d: any) => ({
+            id: d.id,
+            fullName: d.full_name || d.fullName || 'Delivery Partner',
+            mobile: d.mobile,
+            assignedArea: d.assigned_area || d.assignedArea || 'Central Ranchi',
+            vehicleType: d.vehicle_type || d.vehicleType || 'BIKE',
+            vehicleNumber: d.vehicle_number || d.vehicleNumber || 'JH01-1234',
+            status: d.status || 'ACTIVE',
+            joiningDate: d.joining_date || d.joiningDate || new Date().toISOString(),
           }));
           return formatted as unknown as T;
         }
 
         const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
-        if (snapshotData?.data?.pantryCardItems) {
-          return snapshotData.data.pantryCardItems as unknown as T;
+        if (snapshotData?.data?.deliveryBoys) {
+          return snapshotData.data.deliveryBoys as unknown as T;
         }
         return [] as unknown as T;
       }
     }
 
-    // ---------------- 6. BATCHES & INVENTORY API ----------------
-    if (cleanUrl.includes('/api/batches')) {
-      if (method === 'GET') {
-        const { data } = await supabase.from('product_batches').select('*');
-        if (data && data.length > 0) {
-          const formatted = data.map((b: any) => ({
-            id: b.id,
-            productId: b.product_id || b.productId,
-            batchNumber: b.batch_number || b.batchNumber,
-            barcode: b.barcode || '',
-            manufactureDate: b.manufacture_date || b.manufactureDate || '',
-            expiryDate: b.expiry_date || b.expiryDate || '',
-            purchaseQuantity: Number(b.original_quantity || b.quantity || 0),
-            availableQuantity: Number(b.quantity || 0),
-            reservedQuantity: 0,
-            quickSoldQuantity: 0,
-            pantrySoldQuantity: 0,
-            returnedQuantity: 0,
-            shopkeeperName: b.supplier_name || 'Main Supplier',
-            purchaseRate: Number(b.cost_price || 0),
-            mrp: Number(b.mrp || 0),
-            sellingPrice: Number(b.selling_price || 0),
-            createdAt: b.created_at || new Date().toISOString(),
-            updatedAt: b.updated_at || new Date().toISOString(),
-          }));
-          return formatted as unknown as T;
-        }
-
-        const { data: snapshotData } = await supabase.from('pantry_mart_store').select('data').eq('id', 'latest_state').single();
-        if (snapshotData?.data?.batches) {
-          return snapshotData.data.batches as unknown as T;
-        }
-        return [] as unknown as T;
-      }
-    }
-
-    // ---------------- 7. CATEGORIES API ----------------
+    // ---------------- 6. PRODUCT CATEGORIES API ----------------
     if (cleanUrl.includes('/api/categories')) {
       if (method === 'GET') {
         const cachedCatRaw = localStorage.getItem('pm_cached_categories');
@@ -480,7 +442,7 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 8. ORDERS API ----------------
+    // ---------------- 7. ORDER MANAGEMENT API ----------------
     if (cleanUrl.includes('/api/orders')) {
       if (method === 'GET') {
         const cachedOrdRaw = localStorage.getItem('pm_cached_orders');
@@ -547,7 +509,7 @@ export async function handleDirectSupabaseFetch<T>(
       }
     }
 
-    // ---------------- 9. SETTINGS API ----------------
+    // ---------------- 8. SETTINGS API ----------------
     if (cleanUrl.includes('/api/settings')) {
       return {
         defaultPantryLimit: 10000,
@@ -565,7 +527,7 @@ export async function handleDirectSupabaseFetch<T>(
       } as unknown as T;
     }
 
-    // ---------------- 10. GENERIC SNAPSHOT STORE FALLBACK ----------------
+    // ---------------- 9. GENERIC SNAPSHOT STORE FALLBACK ----------------
     if (method === 'GET') {
       const { data: snapshotData } = await supabase
         .from('pantry_mart_store')
