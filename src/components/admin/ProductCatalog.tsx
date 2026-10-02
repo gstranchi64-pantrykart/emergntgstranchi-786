@@ -85,6 +85,7 @@ export const ProductCatalog: React.FC = () => {
       const list = await api.getProducts(false);
       if (Array.isArray(list) && list.length > 0) {
         setProducts(list);
+        localStorage.setItem('pm_cached_products', JSON.stringify(list));
       }
     } catch (err) {
       console.error(err);

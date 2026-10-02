@@ -184,14 +184,40 @@ export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
 
   // Pick the best available FIFO batch for a product (earliest expiry with available quantity)
   const getBestBatchForProduct = (productId: string): ProductBatch | null => {
+    const parseResilientDate = (dateStr: string | undefined | null): number => {
+      if (!dateStr) return 0;
+      const cleaned = String(dateStr).trim();
+      let ms = Date.parse(cleaned);
+      if (!isNaN(ms)) return ms;
+
+      const parts = cleaned.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          const year = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const day = parseInt(parts[2], 10);
+          const d = new Date(year, month, day);
+          if (!isNaN(d.getTime())) return d.getTime();
+        } else {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          const fullYear = year < 100 ? 2000 + year : year;
+          const d = new Date(fullYear, month, day);
+          if (!isNaN(d.getTime())) return d.getTime();
+        }
+      }
+      return Date.now() + 365 * 24 * 60 * 60 * 1000;
+    };
+
     const validBatches = batches
       .filter((b) => {
         if (b.productId !== productId) return false;
         if (b.availableQuantity <= 0) return false;
-        const expTime = new Date(b.expiryDate).getTime();
+        const expTime = parseResilientDate(b.expiryDate);
         return expTime > now;
       })
-      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+      .sort((a, b) => parseResilientDate(a.expiryDate) - parseResilientDate(b.expiryDate));
 
     return validBatches[0] || null;
   };

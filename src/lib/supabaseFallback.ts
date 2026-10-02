@@ -480,6 +480,60 @@ const DEFAULT_BATCHES_SUPABASE = [
     storage_bin: 'B-04',
     shopkeeper_name: 'Jharkhand Grain Distributors',
     created_at: new Date().toISOString()
+  },
+  {
+    id: 'BATCH-000003',
+    product_id: 'PRD-000003',
+    product_name: 'Fortune Sunlite Refined Sunflower Oil 5L',
+    barcode: '8901234567893',
+    batch_number: 'B-OIL-303',
+    manufacturing_date: '2026-08-15',
+    expiry_date: '2027-09-15',
+    cost_price: 600,
+    selling_price: 720,
+    initial_quantity: 60,
+    available_quantity: 60,
+    sold_quantity: 0,
+    status: 'ACTIVE',
+    storage_bin: 'B-08',
+    shopkeeper_name: 'Ranchi Wholesale Kirana',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'BATCH-000004',
+    product_id: 'PRD-000004',
+    product_name: 'Tata Sampann Unpolished Arhar/Toor Dal 1kg',
+    barcode: '8901234567894',
+    batch_number: 'B-DAL-404',
+    manufacturing_date: '2026-07-20',
+    expiry_date: '2027-06-20',
+    cost_price: 125,
+    selling_price: 155,
+    initial_quantity: 120,
+    available_quantity: 120,
+    sold_quantity: 0,
+    status: 'ACTIVE',
+    storage_bin: 'C-01',
+    shopkeeper_name: 'Jharkhand Grain Distributors',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'BATCH-000005',
+    product_id: 'PRD-000005',
+    product_name: 'Amul Pure Ghee 1L Tin',
+    barcode: '8901234567895',
+    batch_number: 'B-GHEE-505',
+    manufacturing_date: '2026-09-10',
+    expiry_date: '2028-01-10',
+    cost_price: 550,
+    selling_price: 610,
+    initial_quantity: 30,
+    available_quantity: 30,
+    sold_quantity: 0,
+    status: 'ACTIVE',
+    storage_bin: 'C-05',
+    shopkeeper_name: 'Ranchi Wholesale Kirana',
+    created_at: new Date().toISOString()
   }
 ];
 
@@ -502,8 +556,42 @@ const DEFAULT_PURCHASES_SUPABASE = [
     invoice_reference: 'INV-2026-9081',
     notes: 'Premium classic basmati lot received.',
     created_at: new Date().toISOString()
+  },
+  {
+    id: 'PUR-10002',
+    purchase_date: '2026-09-15',
+    product_id: 'PRD-000002',
+    product_name: 'Aashirvaad Shuddh Chakki Atta 10kg',
+    barcode: '8901234567892',
+    batch_number: 'B-ATTA-5KG',
+    manufacturing_date: '2026-09-01',
+    expiry_date: '2027-03-01',
+    quantity: 100,
+    purchase_rate: 350,
+    mrp: 480,
+    selling_price: 410,
+    shopkeeper_name: 'Jharkhand Grain Distributors',
+    shopkeeper_contact: '9835123400',
+    invoice_reference: 'INV-2026-9082',
+    notes: 'Atta lot received.',
+    created_at: new Date().toISOString()
   }
 ];
+
+const CLEAN_BATCHES_SEEDS = DEFAULT_BATCHES_SUPABASE.map((b: any) => ({
+  id: b.id,
+  product_id: b.product_id,
+  batch_number: b.batch_number,
+  manufacturing_date: b.manufacturing_date,
+  expiry_date: b.expiry_date,
+  cost_price: b.cost_price,
+  selling_price: b.selling_price,
+  initial_quantity: b.initial_quantity,
+  available_quantity: b.available_quantity,
+  sold_quantity: b.sold_quantity,
+  status: b.status,
+  storage_bin: b.storage_bin,
+}));
 
 // Single Source of Truth RAM memory cache with LocalStorage persistence backup
 const getInitialStore = () => {
@@ -946,6 +1034,15 @@ export async function handleDirectSupabaseFetch<T>(
         const isExpired = expTime < nowTime;
         const isNearExpiry = !isExpired && daysRemaining <= 30;
 
+        const purchaseRate = matchedBatch.purchaseRate || 0;
+        const sellingPrice = matchedBatch.sellingPrice || 0;
+        const mrp = matchedBatch.mrp || matchedProduct.mrp || sellingPrice;
+        const marginPerUnit = sellingPrice - purchaseRate;
+        const marginPercent = purchaseRate > 0 ? Number(((marginPerUnit / purchaseRate) * 100).toFixed(1)) : 0;
+        const totalPurchaseCost = matchedBatch.purchaseQuantity * (purchaseRate || sellingPrice * 0.8);
+        const totalSalesRevenue = (matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * sellingPrice;
+        const profitEarned = (matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * marginPerUnit;
+
         const summary = {
           initialStockPurchased: matchedBatch.purchaseQuantity,
           currentAvailableStock: matchedBatch.availableQuantity,
@@ -953,11 +1050,19 @@ export async function handleDirectSupabaseFetch<T>(
           totalQuickSold: matchedBatch.quickSoldQuantity || 0,
           totalPantrySold: matchedBatch.pantrySoldQuantity || 0,
           totalReturned: matchedBatch.returnedQuantity || 0,
+          totalReturnedStock: matchedBatch.returnedQuantity || 0,
           totalAdjusted: 0,
-          totalPurchaseCost: matchedBatch.purchaseQuantity * (matchedBatch.purchaseRate || matchedBatch.sellingPrice * 0.8),
-          totalSalesRevenue: (matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * matchedBatch.sellingPrice,
-          grossProfit: ((matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * matchedBatch.sellingPrice) - (matchedBatch.purchaseQuantity * (matchedBatch.purchaseRate || matchedBatch.sellingPrice * 0.8)),
-          grossMarginPercent: 20,
+          purchaseRate,
+          sellingPrice,
+          mrp,
+          marginPerUnit,
+          marginPercent,
+          totalPurchaseCost,
+          totalSalesRevenue,
+          realizedRevenue: totalSalesRevenue,
+          profitEarned,
+          grossProfit: totalSalesRevenue - totalPurchaseCost,
+          grossMarginPercent: marginPercent,
           isExpired,
           isNearExpiry,
           daysRemaining,
@@ -1210,6 +1315,8 @@ export async function handleDirectSupabaseFetch<T>(
           const newBatchDb = {
             id: batchId,
             product_id: newPurchase.product_id,
+            product_name: newPurchase.product_name,
+            barcode: newPurchase.barcode,
             batch_number: newPurchase.batch_number,
             manufacturing_date: newPurchase.manufacturing_date,
             expiry_date: newPurchase.expiry_date,
@@ -1220,6 +1327,7 @@ export async function handleDirectSupabaseFetch<T>(
             sold_quantity: 0,
             status: 'ACTIVE',
             storage_bin: 'A-01',
+            shopkeeper_name: newPurchase.shopkeeper_name,
           };
           finalBatch = formatBatchesFromSupabase([newBatchDb])[0];
           

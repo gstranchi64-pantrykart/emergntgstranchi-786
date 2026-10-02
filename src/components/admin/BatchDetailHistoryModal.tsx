@@ -284,7 +284,7 @@ export const BatchDetailHistoryModal: React.FC<BatchDetailHistoryModalProps> = (
                   +{data.summary.initialStockPurchased}
                 </div>
                 <div className="text-[10px] text-emerald-700 font-medium mt-0.5 truncate">
-                  Cost: ₹{data.summary.totalPurchaseCost.toLocaleString()}
+                  Cost: ₹{(data.summary.totalPurchaseCost ?? 0).toLocaleString()}
                 </div>
               </div>
 
@@ -624,7 +624,7 @@ export const BatchDetailHistoryModal: React.FC<BatchDetailHistoryModalProps> = (
                               ₹{p.purchaseRate}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900">
-                              ₹{(p.quantity * p.purchaseRate).toLocaleString()}
+                              ₹{((p.quantity || 0) * (p.purchaseRate || 0)).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
                               {p.invoiceReference || 'N/A'}
@@ -691,7 +691,7 @@ export const BatchDetailHistoryModal: React.FC<BatchDetailHistoryModalProps> = (
                               ₹{qo.sellingPrice}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900">
-                              ₹{qo.totalItemAmount.toLocaleString()}
+                              ₹{(qo.totalItemAmount ?? 0).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3">
                               <StatusBadge status={qo.orderStatus} />
@@ -775,7 +775,7 @@ export const BatchDetailHistoryModal: React.FC<BatchDetailHistoryModalProps> = (
                               ₹{po.sellingPrice}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900">
-                              ₹{po.totalItemAmount.toLocaleString()}
+                              ₹{(po.totalItemAmount ?? 0).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3">
                               <StatusBadge status={po.orderStatus} />

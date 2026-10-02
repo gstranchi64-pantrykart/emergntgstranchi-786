@@ -150,8 +150,14 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
     }
     try {
       const [bData, pData] = await Promise.all([api.getBatches(), api.getProducts()]);
-      if (Array.isArray(bData) && bData.length > 0) setBatches(bData);
-      if (Array.isArray(pData) && pData.length > 0) setProducts(pData);
+      if (Array.isArray(bData) && bData.length > 0) {
+        setBatches(bData);
+        localStorage.setItem('pm_cached_batches', JSON.stringify(bData));
+      }
+      if (Array.isArray(pData) && pData.length > 0) {
+        setProducts(pData);
+        localStorage.setItem('pm_cached_products', JSON.stringify(pData));
+      }
     } catch (err: any) {
       console.error(err);
     } finally {
