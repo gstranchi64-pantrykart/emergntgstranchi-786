@@ -280,11 +280,11 @@ export const CustomerOrdersHistory: React.FC = () => {
                     <div className="font-mono font-bold text-slate-900 text-base">{order.id}</div>
                     {order.orderType === 'PANTRY' ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                        <CreditCard className="w-3.5 h-3.5" /> Pantry Card (0 COD)
+                        <CreditCard className="w-3.5 h-3.5" /> PANTRY
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        <ShoppingBag className="w-3.5 h-3.5" /> Quick Order (Cash COD)
+                        <ShoppingBag className="w-3.5 h-3.5" /> COD
                       </span>
                     )}
                   </div>

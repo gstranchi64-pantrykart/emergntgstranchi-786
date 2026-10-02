@@ -1268,7 +1268,7 @@ export const PantryCardPortal: React.FC = () => {
                                       ? 'bg-purple-200 text-purple-900 border border-purple-300'
                                       : 'bg-amber-200 text-amber-900 border border-amber-300'
                                   }`}>
-                                    {isPantry ? 'Pantry Inward Order' : 'COD Quick Order'}
+                                    {isPantry ? 'PANTRY' : 'COD'}
                                   </span>
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />

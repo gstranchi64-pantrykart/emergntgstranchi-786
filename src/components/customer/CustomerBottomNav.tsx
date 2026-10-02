@@ -67,7 +67,32 @@ export const CustomerBottomNav: React.FC<CustomerBottomNavProps> = ({
           </button>
         )}
 
-        {/* 3. Quick Cart Trigger */}
+        {/* 3. Pantry Cart Trigger (If eligible) */}
+        {isPantryAllowed && (
+          <button
+            onClick={onOpenPantryCart}
+            className="flex flex-col items-center justify-center py-1 px-2 rounded-xl relative cursor-pointer"
+            style={{ color: '#c084fc' /* purple-400 */ }}
+          >
+            <div className="relative">
+              <CreditCard className="w-5 h-5 mb-0.5" />
+              {pantryCartCount > 0 && (
+                <span
+                  style={{
+                    backgroundColor: '#c084fc',
+                    color: '#fff',
+                  }}
+                  className="absolute -top-1.5 -right-2 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs"
+                >
+                  {pantryCartCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-semibold text-purple-300">Pantry Cart</span>
+          </button>
+        )}
+
+        {/* 4. Quick Cart Trigger */}
         <button
           onClick={onOpenQuickCart}
           className="flex flex-col items-center justify-center py-1 px-2 rounded-xl relative cursor-pointer"

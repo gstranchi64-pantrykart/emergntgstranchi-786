@@ -1768,7 +1768,7 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
-                                  <Zap className="w-2.5 h-2.5 text-amber-600 shrink-0" /> QUICK COD
+                                  <Zap className="w-2.5 h-2.5 text-amber-600 shrink-0" /> COD
                                 </span>
                               )}
 
@@ -2018,8 +2018,8 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
                                         PANTRY
                                       </span>
                                     ) : (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                        QUICK COD
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-mono">
+                                        COD
                                       </span>
                                     )}
                                     {isPriority && (

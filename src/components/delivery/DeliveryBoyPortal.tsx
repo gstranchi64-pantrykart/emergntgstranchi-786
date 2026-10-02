@@ -372,7 +372,14 @@ export const DeliveryBoyPortal: React.FC = () => {
               <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                   <div>
-                    <span className="font-mono font-black text-slate-900 text-xs block">{order.id}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-slate-900 text-xs">{order.id}</span>
+                      {order.orderType === 'PANTRY' ? (
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-black rounded border border-purple-200 uppercase">PANTRY</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black rounded border border-amber-200 uppercase font-mono">COD</span>
+                      )}
+                    </div>
                     {(() => {
                       const dt = formatOrderDateTime(getOrderPreciseTimestamp(order));
                       return (
