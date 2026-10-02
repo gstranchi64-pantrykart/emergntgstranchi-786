@@ -1037,9 +1037,15 @@ export async function handleDirectSupabaseFetch<T>(
 
     // ---------------- 1. DASHBOARD SUMMARY API ----------------
     if (cleanUrl.includes('/api/dashboard/summary')) {
-      const cList = Array.isArray(ramStore.customers) && ramStore.customers.length > 0 ? ramStore.customers : DEFAULT_CUSTOMERS_SUPABASE;
-      const pList = Array.isArray(ramStore.products) && ramStore.products.length > 0 ? ramStore.products : DEFAULT_PRODUCTS_SUPABASE;
-      const oList = Array.isArray(ramStore.orders) && ramStore.orders.length > 0 ? ramStore.orders : DEFAULT_ORDERS_SUPABASE;
+      const [prods, custs, ords] = await Promise.all([
+        querySupabaseRest<any[]>('products?select=*'),
+        querySupabaseRest<any[]>('customers?select=*'),
+        querySupabaseRest<any[]>('orders?select=*'),
+      ]);
+
+      const cList = (custs && custs.length > 0) ? formatCustomersFromSupabase(custs) : formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
+      const pList = (prods && prods.length > 0) ? formatProductsFromSupabase(prods) : formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+      const oList = (ords && ords.length > 0) ? formatOrdersFromSupabase(ords) : formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE);
 
       const summaryObj = {
         totalCustomers: cList.length,
@@ -1069,61 +1075,17 @@ export async function handleDirectSupabaseFetch<T>(
         pendingAuditorChecksCount: 0,
       };
 
-      ramStore.summary = summaryObj;
-
-      triggerBackgroundTask(async () => {
-        const [prods, custs, ords] = await Promise.all([
-          querySupabaseRest<any[]>('products?select=*'),
-          querySupabaseRest<any[]>('customers?select=*'),
-          querySupabaseRest<any[]>('orders?select=*'),
-        ]);
-
-        let changed = false;
-        if (prods && prods.length > 0) {
-          ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(prods));
-          changed = true;
-        }
-        if (custs && custs.length > 0) {
-          ramStore.customers = mergeArraysById(ramStore.customers, formatCustomersFromSupabase(custs));
-          changed = true;
-        }
-        if (ords && ords.length > 0) {
-          ramStore.orders = mergeArraysById(ramStore.orders, formatOrdersFromSupabase(ords));
-          changed = true;
-        }
-        if (changed) {
-          saveRamStoreToLocal();
-          notifyLocalSubscribers('SUMMARY_SYNC_COMPLETE');
-        }
-      });
-
       return summaryObj as unknown as T;
     }
 
     // ---------------- 1.1 BATCH INVENTORY & PURCHASES API (REST BYPASS) ----------------
     if (cleanUrl.endsWith('/api/batches')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('product_batches?select=*');
-          if (data && data.length > 0) {
-            ramStore.batches = mergeArraysById(ramStore.batches, formatBatchesFromSupabase(data));
-            saveRamStoreToLocal();
-            notifyLocalSubscribers('UPDATE_BATCHES', ramStore.batches);
-          }
-        });
-
-        if (ramStore.batches && ramStore.batches.length > 0) {
-          return ramStore.batches as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('product_batches?select=*');
         if (data && data.length > 0) {
-          ramStore.batches = mergeArraysById(ramStore.batches, formatBatchesFromSupabase(data));
-          return saveAndReturn(ramStore.batches) as unknown as T;
+          return formatBatchesFromSupabase(data) as unknown as T;
         }
-
-        ramStore.batches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
-        return saveAndReturn(ramStore.batches) as unknown as T;
+        return formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE) as unknown as T;
       }
     }
 
@@ -1382,27 +1344,11 @@ export async function handleDirectSupabaseFetch<T>(
 
     if (cleanUrl.endsWith('/api/purchases')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('purchases?select=*');
-          if (data && data.length > 0) {
-            ramStore.purchases = mergeArraysById(ramStore.purchases, formatPurchasesFromSupabase(data));
-            saveRamStoreToLocal();
-            notifyLocalSubscribers('UPDATE_PURCHASES', ramStore.purchases);
-          }
-        });
-
-        if (ramStore.purchases && ramStore.purchases.length > 0) {
-          return ramStore.purchases as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('purchases?select=*');
         if (data && data.length > 0) {
-          ramStore.purchases = mergeArraysById(ramStore.purchases, formatPurchasesFromSupabase(data));
-          return saveAndReturn(ramStore.purchases) as unknown as T;
+          return formatPurchasesFromSupabase(data) as unknown as T;
         }
-
-        ramStore.purchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
-        return saveAndReturn(ramStore.purchases) as unknown as T;
+        return formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE) as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -1553,26 +1499,11 @@ export async function handleDirectSupabaseFetch<T>(
     // ---------------- 2. PRODUCTS MASTER & IMAGES API ----------------
     if (cleanUrl.endsWith('/api/products') || cleanUrl.includes('/api/products')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const relData = await querySupabaseRest<any[]>('products?select=*');
-          if (relData) {
-            ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(relData));
-            saveRamStoreToLocal();
-            notifyLocalSubscribers('UPDATE_PRODUCTS', ramStore.products);
-          }
-        });
-
-        if (ramStore.products && ramStore.products.length > 0) {
-          return ramStore.products as unknown as T;
-        }
-
         const relData = await querySupabaseRest<any[]>('products?select=*');
-        if (relData) {
-          ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(relData));
-          return saveAndReturn(ramStore.products) as unknown as T;
+        if (relData && relData.length > 0) {
+          return formatProductsFromSupabase(relData) as unknown as T;
         }
-
-        return [] as unknown as T;
+        return formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE) as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -1788,36 +1719,14 @@ export async function handleDirectSupabaseFetch<T>(
         const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)/);
         const singleCustId = idMatch ? idMatch[1] : null;
 
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('customers?select=*');
-          if (data && data.length > 0) {
-            ramStore.customers = formatCustomersFromSupabase(data);
-          }
-        });
-
-        if (ramStore.customers && ramStore.customers.length > 0) {
-          if (singleCustId) {
-            const found = ramStore.customers.find((c: any) => c.id === singleCustId || c.mobile === singleCustId);
-            return (found || ramStore.customers[0]) as unknown as T;
-          }
-          return ramStore.customers as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('customers?select=*');
-        if (data && data.length > 0) {
-          ramStore.customers = formatCustomersFromSupabase(data);
-          if (singleCustId) {
-            const found = ramStore.customers.find((c: any) => c.id === singleCustId || c.mobile === singleCustId);
-            return (found || ramStore.customers[0]) as unknown as T;
-          }
-          return ramStore.customers as unknown as T;
-        }
+        const list = (data && data.length > 0) ? formatCustomersFromSupabase(data) : formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
 
-        ramStore.customers = formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
         if (singleCustId) {
-          return ramStore.customers[0] as unknown as T;
+          const found = list.find((c: any) => c.id === singleCustId || c.mobile === singleCustId);
+          return (found || list[0]) as unknown as T;
         }
-        return ramStore.customers as unknown as T;
+        return list as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -1947,25 +1856,11 @@ export async function handleDirectSupabaseFetch<T>(
     // ---------------- 6. AUDITOR PANEL API ----------------
     if (cleanUrl.includes('/api/auditors') || cleanUrl.includes('/api/auditor-checks')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const audData = await querySupabaseRest<any[]>('auditors?select=*');
-          if (audData && audData.length > 0) {
-            ramStore.auditors = formatAuditorsFromSupabase(audData);
-          }
-        });
-
-        if (ramStore.auditors && ramStore.auditors.length > 0) {
-          return ramStore.auditors as unknown as T;
-        }
-
         const audData = await querySupabaseRest<any[]>('auditors?select=*');
         if (audData && audData.length > 0) {
-          ramStore.auditors = formatAuditorsFromSupabase(audData);
-          return ramStore.auditors as unknown as T;
+          return formatAuditorsFromSupabase(audData) as unknown as T;
         }
-
-        ramStore.auditors = formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE);
-        return ramStore.auditors as unknown as T;
+        return formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE) as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -2054,25 +1949,11 @@ export async function handleDirectSupabaseFetch<T>(
     // ---------------- 7. DELIVERY BOY PANEL API ----------------
     if (cleanUrl.includes('/api/delivery-boys')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('delivery_boys?select=*');
-          if (data && data.length > 0) {
-            ramStore.delivery = formatDeliveryFromSupabase(data);
-          }
-        });
-
-        if (ramStore.delivery && ramStore.delivery.length > 0) {
-          return ramStore.delivery as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('delivery_boys?select=*');
         if (data && data.length > 0) {
-          ramStore.delivery = formatDeliveryFromSupabase(data);
-          return ramStore.delivery as unknown as T;
+          return formatDeliveryFromSupabase(data) as unknown as T;
         }
-
-        ramStore.delivery = formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE);
-        return ramStore.delivery as unknown as T;
+        return formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE) as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -2157,50 +2038,22 @@ export async function handleDirectSupabaseFetch<T>(
     // ---------------- 8. PRODUCT CATEGORIES API ----------------
     if (cleanUrl.includes('/api/categories')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('categories?select=*');
-          if (data && data.length > 0) {
-            ramStore.categories = formatCategoriesFromSupabase(data);
-          }
-        });
-
-        if (ramStore.categories && ramStore.categories.length > 0) {
-          return ramStore.categories as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('categories?select=*');
         if (data && data.length > 0) {
-          ramStore.categories = formatCategoriesFromSupabase(data);
-          return ramStore.categories as unknown as T;
+          return formatCategoriesFromSupabase(data) as unknown as T;
         }
-
-        ramStore.categories = formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE);
-        return ramStore.categories as unknown as T;
+        return formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE) as unknown as T;
       }
     }
 
     // ---------------- 9. ORDER MANAGEMENT API ----------------
     if (cleanUrl.includes('/api/orders')) {
       if (method === 'GET') {
-        triggerBackgroundTask(async () => {
-          const data = await querySupabaseRest<any[]>('orders?select=*&order=created_at.desc');
-          if (data && data.length > 0) {
-            ramStore.orders = formatOrdersFromSupabase(data);
-          }
-        });
-
-        if (ramStore.orders && ramStore.orders.length > 0) {
-          return ramStore.orders as unknown as T;
-        }
-
         const data = await querySupabaseRest<any[]>('orders?select=*&order=created_at.desc');
         if (data && data.length > 0) {
-          ramStore.orders = formatOrdersFromSupabase(data);
-          return ramStore.orders as unknown as T;
+          return formatOrdersFromSupabase(data) as unknown as T;
         }
-
-        ramStore.orders = formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE);
-        return ramStore.orders as unknown as T;
+        return formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE) as unknown as T;
       }
 
       if (method === 'POST' && body) {
