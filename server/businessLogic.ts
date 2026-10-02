@@ -773,8 +773,17 @@ export class BusinessService {
     );
     const inTransitValue = inTransitOrders.reduce((acc, o) => acc + (o.totalAmount || 0), 0);
 
+    // 3. Audit-Missing Hold: credit for items the auditor marked MISSING stays locked
+    //    (missing only deducts the wallet — it must NEVER free the buying cap). As the
+    //    missing stock leaves stockValuation, this hold compensates so the limit is unchanged.
+    //    Returns and Pantry-Pay consumption intentionally have NO hold, so they DO free the cap.
+    const familyMissingHold = familyIds.reduce((acc, id) => {
+      const m = db.customers.find((c) => c.id === id);
+      return acc + (m?.auditMissingHold || 0);
+    }, 0);
+
     const totalLimit = customer.pantryLimit || 0;
-    const computedUsedLimit = stockValuation + inTransitValue;
+    const computedUsedLimit = stockValuation + inTransitValue + familyMissingHold;
 
     customer.usedPantryLimit = computedUsedLimit;
     customer.availablePantryLimit = Math.max(0, totalLimit - computedUsedLimit);
@@ -5409,6 +5418,14 @@ export class BusinessService {
               item.walletDeducted = true;
               deductedSum += itemDeduction;
 
+              // Keep this credit locked so the MISSING item never frees the buying cap.
+              // (Missing only deducts the wallet; the purchasing limit stays reduced.)
+              const holdCustomer = res.customer || db.customers.find((c) => c.id === audit.customerId);
+              if (holdCustomer) {
+                holdCustomer.auditMissingHold = (holdCustomer.auditMissingHold || 0) + itemDeduction;
+                holdCustomer.updatedAt = today;
+              }
+
               // Automatically reduce the physical pantry card item quantity for consumed/missing product
               if (item.pantryCardItemId) {
                 const pci = db.pantryCardItems.find((p) => p.id === item.pantryCardItemId);
@@ -5480,7 +5497,8 @@ export class BusinessService {
     }
     audit.totalCreditRestored = (audit.totalCreditRestored || 0) + totalRestoredCredit;
 
-    // 3. Process Replacements Initiated during this audit -> Swap Batch Number, Mfg Date & Exp Date with matching Used History item
+    // 3. Process Replacements Initiated during this audit -> Transfer the matching
+    //    Used-History item (same barcode) BACK into active In-Pantry stock.
     for (const item of audit.itemsChecked) {
       if ((item.qtyReplacement && item.qtyReplacement > 0) || item.actionTaken === 'REPLACEMENT_INITIATED') {
         const activePci = db.pantryCardItems.find((p) => p.id === item.pantryCardItemId);
@@ -5489,41 +5507,27 @@ export class BusinessService {
           : db.pantryCardItems.find(
               (p) =>
                 p.customerId === audit.customerId &&
-                p.quantity === 0 &&
+                (p.quantity === 0 || p.status === 'CONSUMED_AND_PAID') &&
                 p.barcode &&
                 activePci?.barcode &&
+                p.id !== activePci.id &&
                 p.barcode.trim().toLowerCase() === activePci.barcode.trim().toLowerCase()
             );
 
         if (activePci && usedPci) {
-          const oldActiveBatch = activePci.batchNumber;
-          const oldActiveMfg = activePci.manufacturingDate;
-          const oldActiveExp = activePci.expiryDate;
-          const oldActiveBatchId = activePci.batchId;
-
-          const oldUsedBatch = usedPci.batchNumber;
-          const oldUsedMfg = usedPci.manufacturingDate;
-          const oldUsedExp = usedPci.expiryDate;
-          const oldUsedBatchId = usedPci.batchId;
-
-          // Swap Active Stock to have Used History's Batch #, Mfg Date, and Exp Date
-          activePci.batchNumber = oldUsedBatch;
-          activePci.manufacturingDate = oldUsedMfg;
-          activePci.expiryDate = oldUsedExp;
-          if (oldUsedBatchId) activePci.batchId = oldUsedBatchId;
-          activePci.updatedAt = today;
-
-          // Swap Used History to have Active Stock's Batch #, Mfg Date, and Exp Date
-          usedPci.batchNumber = oldActiveBatch;
-          usedPci.manufacturingDate = oldActiveMfg;
-          usedPci.expiryDate = oldActiveExp;
-          if (oldActiveBatchId) usedPci.batchId = oldActiveBatchId;
+          // Transfer the matched Used item back into active In-Pantry stock.
+          const repQty = item.qtyReplacement && item.qtyReplacement > 0 ? item.qtyReplacement : 1;
+          usedPci.quantity = repQty;
+          usedPci.totalValue = repQty * (usedPci.unitPrice || activePci.unitPrice || 0);
+          usedPci.status = 'DELIVERED';
+          usedPci.productName = usedPci.productName.replace(/\s*\((?:Audit Missing|Used|Consumed)\)\s*$/i, '');
           usedPci.updatedAt = today;
 
           item.isBatchSwapped = true;
-          item.replacedBatchNumber = oldUsedBatch;
-          item.replacedMfgDate = oldUsedMfg;
-          item.replacedExpDate = oldUsedExp;
+          item.replacedBatchNumber = usedPci.batchNumber;
+          item.replacedMfgDate = usedPci.manufacturingDate;
+          item.replacedExpDate = usedPci.expiryDate;
+          item.replacementTargetUsedItemId = usedPci.id;
         }
       }
     }
@@ -5838,113 +5842,28 @@ export class BusinessService {
 
       let itemDeduction = 0;
 
-      // 1. Pantry Pay Logic: Items used by customer but paid via Credit Limit restoration during audit
+      // IMPORTANT: No financial or stock side effects happen at auditor submission.
+      // Wallet deductions (missing), credit-limit changes (return / pantry-pay),
+      // stock reductions and used->in-stock replacement transfers are all applied
+      // ONLY when the customer approves & confirms the bill (confirmAuditBillByCustomer).
+      // Here we only compute estimate totals / counts for the PENDING bill and keep
+      // the live pantry card untouched until approval.
+
+      // 1. Pantry Pay estimate (credit limit restored on approval)
       if (qPPay > 0) {
-        const creditIncrease = qPPay * unitPrice;
-        totalPantryPayCreditIncrease += creditIncrease;
-        customer.availablePantryLimit = (customer.availablePantryLimit || 0) + creditIncrease;
-        
-        const openingLimit = customer.availablePantryLimit - creditIncrease;
-        // Log to Credit Ledger
-        db.pantryCreditLedger.unshift({
-          id: `LEDGER-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          customerId: customer.id,
-          date: getToday(),
-          time: getNowTimeWithSeconds(),
-          transactionType: 'AUDIT_CREDIT_RESTORE',
-          amount: creditIncrease,
-          openingLimit: openingLimit,
-          closingLimit: customer.availablePantryLimit,
-          balanceAfter: customer.availablePantryLimit,
-          description: `Audit Settlement: Pantry Pay for ${qPPay} units of ${pci.productName} (ID: ${pci.id})`,
-          referenceId: checkId,
-          createdAt: new Date().toISOString(),
-        });
+        totalPantryPayCreditIncrease += qPPay * unitPrice;
       }
 
-      // 2. Missing items: Wallet Deduction (Processed Immediately upon Auditor Check submission!)
+      // 2. Missing estimate (wallet deducted on approval)
       if (qMissing > 0) {
         itemDeduction = qMissing * unitPrice;
         totalDeductions += itemDeduction;
         notAvailableCount += qMissing;
-
-        try {
-          const prevBalance = customer.walletBalance ?? 1000;
-          const newBalance = prevBalance - itemDeduction;
-          customer.walletBalance = newBalance;
-          customer.updatedAt = getToday();
-
-          // Create Wallet Transaction Immediately
-          const wTxn: WalletTransaction = {
-            id: `WTX-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
-            customerId: customer.id,
-            customerName: customer.fullName,
-            transactionType: 'AUDIT_DEDUCTION',
-            amount: -itemDeduction,
-            previousBalance: prevBalance,
-            newBalance: newBalance,
-            referenceId: checkId,
-            userId: auditorUser.id,
-            role: 'AUDITOR',
-            reason: `Audit Discrepancy Deduction: ${pci.productName} (${qMissing} Qty Missing, Audit #${checkId})`,
-            date: getToday(),
-            time: getNowTimeWithSeconds(),
-            timestamp: new Date().toISOString(),
-            status: 'SUCCESS',
-          };
-          if (!db.walletTransactions) db.walletTransactions = [];
-          db.walletTransactions.unshift(wTxn);
-
-          chk.walletTransactionId = wTxn.id;
-          chk.walletDeducted = true;
-          chk.walletDeductionAmount = itemDeduction;
-        } catch (err: any) {
-          console.warn('Wallet deduction error during auditor check submission:', err.message);
-        }
-
-        // Only create a duplicate used item if the original is still partially active (qty > 0)
-        // because if the original is fully consumed (qty == 0), the original itself goes to the Used Box!
-        const remainingQty = originalQty - qMissing;
-        if (remainingQty > 0) {
-          const usedPci: PantryCardItem = {
-            id: `PCI-USD-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
-            customerId: pci.customerId,
-            customerName: pci.customerName,
-            orderId: pci.orderId,
-            productId: pci.productId,
-            productName: `${pci.productName} (Audit Missing)`,
-            brand: pci.brand,
-            weightSize: pci.weightSize,
-            barcode: pci.barcode,
-            batchId: pci.batchId,
-            batchNumber: pci.batchNumber,
-            manufacturingDate: pci.manufacturingDate || '',
-            expiryDate: pci.expiryDate || '',
-            image: pci.image,
-            quantity: 0, // 0 quantity so it goes to Used History Box
-            unitPrice: pci.unitPrice,
-            totalValue: 0,
-            deliveryDate: pci.deliveryDate,
-            status: 'CONSUMED_AND_PAID', // marked as used & paid
-            createdAt: getToday(),
-            updatedAt: getToday(),
-          };
-          db.pantryCardItems.unshift(usedPci);
-        }
       }
 
       if (qAvail > 0) availableCount += qAvail;
       if (qDamaged > 0 || qReturn > 0 || qReplace > 0) {
         damagedCount += (qDamaged + qReturn + qReplace);
-        pci.status = 'DAMAGED_VERIFIED';
-      }
-
-      // Update Pantry Card Quantity:
-      // The new quantity in the pantry is what was physically found + what is being returned/replaced (until pickup)
-      pci.quantity = qAvail + qDamaged + qReturn + qReplace; 
-      pci.totalValue = pci.quantity * pci.unitPrice;
-      if (pci.quantity === 0) {
-        pci.status = 'CONSUMED_AND_PAID';
       }
 
       // 3. Initiate Returns

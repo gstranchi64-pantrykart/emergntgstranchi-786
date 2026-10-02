@@ -33,6 +33,7 @@ export interface Customer {
   pantryLimit: number; // Configurable Pantry Limit for this customer (e.g. 10000)
   usedPantryLimit: number; // Current used credit
   availablePantryLimit: number; // Calculated: pantryLimit - usedPantryLimit
+  auditMissingHold?: number; // Credit kept locked for audit-missing items (missing never frees the buying cap)
   walletBalance: number; // Dedicated Customer Wallet Balance for audit deductions / adjustments
   isPantryAllowed?: boolean; // Admin permission flag for Pantry Card order feature
   status: 'ACTIVE' | 'INACTIVE';
