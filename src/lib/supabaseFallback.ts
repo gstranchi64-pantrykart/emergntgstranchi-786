@@ -1082,10 +1082,10 @@ export async function handleDirectSupabaseFetch<T>(
     if (cleanUrl.endsWith('/api/batches')) {
       if (method === 'GET') {
         const data = await querySupabaseRest<any[]>('product_batches?select=*');
-        if (data && data.length > 0) {
-          return formatBatchesFromSupabase(data) as unknown as T;
-        }
-        return formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE) as unknown as T;
+        const dbBatches = data ? formatBatchesFromSupabase(data) : [];
+        const defaultBatches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        const merged = mergeArraysById(defaultBatches, dbBatches);
+        return merged as unknown as T;
       }
     }
 
@@ -1093,18 +1093,11 @@ export async function handleDirectSupabaseFetch<T>(
       const match = cleanUrl.match(/\/api\/batches\/product\/([^/]+)/);
       const prodId = match ? match[1] : null;
       if (prodId) {
-        let batchesList = ramStore.batches;
-        if (!batchesList) {
-          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
-          if (raw) {
-            batchesList = formatBatchesFromSupabase(raw);
-            ramStore.batches = batchesList;
-            saveRamStoreToLocal();
-          }
-        }
-        const filtered = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).filter(
-          (b: any) => b.productId === prodId
-        );
+        const data = await querySupabaseRest<any[]>('product_batches?select=*');
+        const dbBatches = data ? formatBatchesFromSupabase(data) : [];
+        const defaultBatches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        const merged = mergeArraysById(defaultBatches, dbBatches);
+        const filtered = merged.filter((b: any) => b.productId === prodId);
         return filtered as unknown as T;
       }
     }
@@ -1113,21 +1106,22 @@ export async function handleDirectSupabaseFetch<T>(
       const match = cleanUrl.match(/\/api\/batches\/([^/]+)\/details/);
       const batchIdent = match ? match[1] : null;
       if (batchIdent) {
-        let batchesList = ramStore.batches;
-        if (!batchesList) {
-          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
-          if (raw) {
-            batchesList = formatBatchesFromSupabase(raw);
-            ramStore.batches = batchesList;
-            saveRamStoreToLocal();
-          }
-        }
-        const matchedBatch = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).find(
+        const data = await querySupabaseRest<any[]>('product_batches?select=*');
+        const dbBatches = data ? formatBatchesFromSupabase(data) : [];
+        const defaultBatches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        const mergedBatches = mergeArraysById(defaultBatches, dbBatches);
+
+        const matchedBatch = mergedBatches.find(
           (b: any) => b.id === batchIdent || b.batchNumber === batchIdent
         );
         if (!matchedBatch) return null;
 
-        const matchedProduct = (ramStore.products || []).find((p: any) => p.id === matchedBatch.productId) || {
+        const relData = await querySupabaseRest<any[]>('products?select=*');
+        const dbProducts = relData ? formatProductsFromSupabase(relData) : [];
+        const defaultProducts = formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+        const mergedProducts = mergeArraysById(defaultProducts, dbProducts);
+
+        const matchedProduct = mergedProducts.find((p: any) => p.id === matchedBatch.productId) || {
           id: matchedBatch.productId,
           name: matchedBatch.productName || 'Sample Product',
           brand: 'Standard FMCG',
@@ -1240,20 +1234,18 @@ export async function handleDirectSupabaseFetch<T>(
       const match = cleanUrl.match(/\/api\/inventory\/barcode\/([^/]+)\/details/);
       const barc = match ? match[1] : null;
       if (barc) {
-        let batchesList = ramStore.batches;
-        if (!batchesList) {
-          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
-          if (raw) {
-            batchesList = formatBatchesFromSupabase(raw);
-            ramStore.batches = batchesList;
-            saveRamStoreToLocal();
-          }
-        }
-        const filtered = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).filter(
-          (b: any) => b.barcode === barc
-        );
+        const raw = await querySupabaseRest<any[]>('product_batches?select=*');
+        const dbBatches = raw ? formatBatchesFromSupabase(raw) : [];
+        const defaultBatches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        const mergedBatches = mergeArraysById(defaultBatches, dbBatches);
+        const filtered = mergedBatches.filter((b: any) => b.barcode === barc);
         
-        const matchedProduct = (ramStore.products || []).find((p: any) => p.barcode === barc) || {
+        const relData = await querySupabaseRest<any[]>('products?select=*');
+        const dbProducts = relData ? formatProductsFromSupabase(relData) : [];
+        const defaultProducts = formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+        const mergedProducts = mergeArraysById(defaultProducts, dbProducts);
+
+        const matchedProduct = mergedProducts.find((p: any) => p.barcode === barc) || {
           id: 'PRD-MOCK',
           name: filtered[0]?.productName || 'Sample Barcode Product',
           brand: filtered[0]?.brand || 'Standard FMCG',
@@ -1345,10 +1337,10 @@ export async function handleDirectSupabaseFetch<T>(
     if (cleanUrl.endsWith('/api/purchases')) {
       if (method === 'GET') {
         const data = await querySupabaseRest<any[]>('purchases?select=*');
-        if (data && data.length > 0) {
-          return formatPurchasesFromSupabase(data) as unknown as T;
-        }
-        return formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE) as unknown as T;
+        const dbPurchases = data ? formatPurchasesFromSupabase(data) : [];
+        const defaultPurchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
+        const merged = mergeArraysById(defaultPurchases, dbPurchases);
+        return merged as unknown as T;
       }
 
       if (method === 'POST' && body) {
@@ -1405,14 +1397,12 @@ export async function handleDirectSupabaseFetch<T>(
           ramStore.batches[existingBatchIndex] = finalBatch;
 
           // Sync PATCH to Supabase table
-          triggerBackgroundTask(async () => {
-            await querySupabaseRest(`product_batches?id=eq.${old.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify({
-                initial_quantity: finalBatch.purchaseQuantity,
-                available_quantity: finalBatch.availableQuantity,
-              }),
-            });
+          await querySupabaseRest(`product_batches?id=eq.${old.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              initial_quantity: finalBatch.purchaseQuantity,
+              available_quantity: finalBatch.availableQuantity,
+            }),
           });
         } else {
           const newBatchDb = {
@@ -1442,23 +1432,19 @@ export async function handleDirectSupabaseFetch<T>(
           ramStore.batches.unshift(finalBatch);
 
           // Sync POST to Supabase table
-          triggerBackgroundTask(async () => {
-            await querySupabaseRest('product_batches', {
-              method: 'POST',
-              body: JSON.stringify([newBatchDb]),
-            });
+          await querySupabaseRest('product_batches', {
+            method: 'POST',
+            body: JSON.stringify([newBatchDb]),
           });
         }
 
         // Sync POST purchase to Supabase table (catch silently if purchases table does not exist)
-        triggerBackgroundTask(async () => {
-          try {
-            await querySupabaseRest('purchases', {
-              method: 'POST',
-              body: JSON.stringify([newPurchase]),
-            });
-          } catch {}
-        });
+        try {
+          await querySupabaseRest('purchases', {
+            method: 'POST',
+            body: JSON.stringify([newPurchase]),
+          });
+        } catch {}
 
         return saveAndReturn({
           purchase: formattedPurchase,
@@ -1500,10 +1486,10 @@ export async function handleDirectSupabaseFetch<T>(
     if (cleanUrl.endsWith('/api/products') || cleanUrl.includes('/api/products')) {
       if (method === 'GET') {
         const relData = await querySupabaseRest<any[]>('products?select=*');
-        if (relData && relData.length > 0) {
-          return formatProductsFromSupabase(relData) as unknown as T;
-        }
-        return formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE) as unknown as T;
+        const dbProducts = relData ? formatProductsFromSupabase(relData) : [];
+        const defaultProducts = formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+        const merged = mergeArraysById(defaultProducts, dbProducts);
+        return merged as unknown as T;
       }
 
       if (method === 'POST' && body) {
