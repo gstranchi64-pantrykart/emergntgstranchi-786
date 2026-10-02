@@ -1642,6 +1642,15 @@ async function startServer() {
       console.warn('[Supabase Startup] Cloud sync notice:', err.message);
     }
   });
+
+  // Also listen on 8001 so the platform ingress (which routes /api -> 8001) can
+  // reach this same Express API from the public preview URL.
+  const API_INGRESS_PORT = 8001;
+  if (PORT !== API_INGRESS_PORT) {
+    app.listen(API_INGRESS_PORT, '0.0.0.0', () => {
+      console.log(`API also listening on http://0.0.0.0:${API_INGRESS_PORT} for ingress /api routing`);
+    });
+  }
 }
 
 startServer().catch((err) => {
