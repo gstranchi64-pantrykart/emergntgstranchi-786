@@ -51,8 +51,14 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Limit model: usedPantryLimit = stockValuation + inTransit + auditMissingHold (missing stays locked, return/pantry-pay free the cap) — matches user's buying-cap model.
 - Added PANTRY_PAY_CREDIT ledger entry: every Pantry Pay product payment now writes a Limit Statement row (opening->closing limit) with date+time. Wallet statement already logs AUDIT_DEDUCTION/recharge with date+time. Both statements render date+time in customer Profile (Wallet History + Limit & Ledger tabs). Verified visually.
 
+## Deployment fix (2026-10-02)
+- BUILD blocker (per deployer RCA): farm template reads `backend/.env` from env_paths; file was missing → "read envs" PathError. FIXED: created /app/backend/.env (MONGO_URL, DB_NAME, SUPABASE_*), /app/frontend/.env (VITE_*), and /app/.env root (single-process Vite app reads env from root).
+- Security: removed ALL hardcoded Supabase credential fallbacks (incl. service-role key) from server/supabase.ts + src/lib/supabaseClient.ts → now env-only with crash-safe guards. Verified app still loads + Supabase creds load from env.
+- Not-real-blockers (left as-is): preview supervisor conf (read-only, not in build context) and .gitignore blocking .env (intentional — keeps secrets out of public GitHub; deployer reads from live mount).
+
 ## Backlog / Next
-- P1: Real Razorpay keys (user to provide) to replace demo gateway
-- P1: Backfill date/time on OLD seed ledger entries (currently show blank date)
+- P0: REDEPLOY — backend/.env now exists so `read envs` step should pass
+- P1: Real Razorpay keys to replace demo gateway
+- P1: Backfill date/time on OLD seed ledger entries
 - P1: Other DEMO integrations (MSG91 SMS, WhatsApp, Google Maps)
 - P2: Push code to GitHub repo pantrykartlive-12345 via Save to GitHub UI
