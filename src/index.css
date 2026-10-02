@@ -209,3 +209,30 @@
   color: #ffffff !important;
 }
 
+
+
+/* Pantry Pay live barcode scanner animations */
+@keyframes scanline {
+  0% { top: 8%; }
+  50% { top: 90%; }
+  100% { top: 8%; }
+}
+.animate-scanline {
+  animation: scanline 1.8s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}

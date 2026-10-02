@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Customer, Product, PantryPayment, PantryCardItem, hasPantryAccess } from '../../types';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { BarcodeCameraScanner } from './BarcodeCameraScanner';
 import {
   QrCode,
   Search,
@@ -63,8 +64,9 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Scanner camera simulation state
+  // Scanner camera state
   const [isScanningCamera, setIsScanningCamera] = useState(false);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
 
   // Razorpay Gateway Simulation State
   const [showRazorpay, setShowRazorpay] = useState(false);
@@ -302,19 +304,20 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
     setBarcodeInput('');
   };
 
+  // Opens the real device camera to scan a product barcode
   const handleSimulateCameraCapture = () => {
-    setIsScanningCamera(true);
-    setTimeout(() => {
-      setIsScanningCamera(false);
-      // Pick a random product from customer's available pantry stock
-      const pool = pantryItems.filter(isItemInPantryStock);
-      if (pool.length > 0) {
-        const randomPci = pool[Math.floor(Math.random() * pool.length)];
-        handleSelectPantryItem(randomPci);
-      } else {
-        setErrorMsg("No items available in your home pantry stock to simulate scanning.");
-      }
-    }, 1200);
+    setErrorMsg(null);
+    setPaymentSuccessRecords([]);
+    setShowCameraScanner(true);
+  };
+
+  // Called when the live camera scanner decodes a barcode
+  const handleCameraDetected = (decodedText: string) => {
+    setShowCameraScanner(false);
+    const code = (decodedText || '').trim();
+    if (!code) return;
+    // Reuse the same pantry-stock-only validation as manual barcode entry
+    handleBarcodeSearch(code);
   };
 
   // Triggers Razorpay Checkout simulator
@@ -375,6 +378,14 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden max-w-3xl w-full mx-auto relative">
+      {/* Live Camera Barcode Scanner */}
+      {showCameraScanner && (
+        <BarcodeCameraScanner
+          onDetected={handleCameraDetected}
+          onClose={() => setShowCameraScanner(false)}
+        />
+      )}
+
       {/* Razorpay Popup Modal Simulator */}
       {showRazorpay && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -819,6 +830,7 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
                     <button
                       onClick={handleSimulateCameraCapture}
                       disabled={isScanningCamera}
+                      data-testid="pantry-pay-camera-scan-button"
                       className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer shrink-0 animate-pulse"
                     >
                       <Camera className={`w-4 h-4 ${isScanningCamera ? 'animate-spin text-emerald-400' : ''}`} />
