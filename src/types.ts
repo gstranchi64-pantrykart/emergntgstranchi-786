@@ -93,6 +93,8 @@ export interface Product {
   description: string;
   hsn?: string;
   barcode: string; // e.g. "123456789"
+  sku?: string;
+  costPrice?: number;
   mrp: number;
   sellingPrice: number;
   discount: number; // Percentage or amount

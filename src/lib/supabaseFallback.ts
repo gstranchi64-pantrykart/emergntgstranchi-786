@@ -1511,6 +1511,8 @@ export async function handleDirectSupabaseFetch<T>(
           description: body.description || '',
           hsn: body.hsn || '1006',
           barcode: body.barcode || String(Math.floor(100000000000 + Math.random() * 900000000000)),
+          sku: body.sku || `SKU-${newId.split('-')[1] || Date.now().toString().slice(-6)}`,
+          costPrice: Number(body.costPrice || body.cost_price || 0),
           mrp: Number(body.mrp || 100),
           sellingPrice: Number(body.sellingPrice || body.mrp || 100),
           discount: Number(body.discount || 0),
@@ -1534,19 +1536,62 @@ export async function handleDirectSupabaseFetch<T>(
             category: formattedProduct.category,
             sub_category: formattedProduct.subCategory,
             barcode: formattedProduct.barcode,
+            sku: formattedProduct.sku,
             images: formattedProduct.images,
             unit: formattedProduct.unit,
-            weight_size: formattedProduct.weightSize,
             mrp: formattedProduct.mrp,
             selling_price: formattedProduct.sellingPrice,
+            cost_price: formattedProduct.costPrice,
             is_pantry_eligible: formattedProduct.orderEligibility !== 'QUICK_ONLY',
             is_quick_order_eligible: formattedProduct.orderEligibility !== 'PANTRY_ONLY',
             status: formattedProduct.status,
+            description: formattedProduct.description,
+            created_at: formattedProduct.createdAt,
             updated_at: formattedProduct.updatedAt,
           }]),
         });
 
         return formattedProduct as unknown as T;
+      }
+
+      if (method === 'PUT' && body) {
+        const idMatch = cleanUrl.match(/\/api\/products\/([^/]+)/);
+        const prodId = idMatch ? idMatch[1] : null;
+        if (prodId) {
+          await querySupabaseRest(`products?id=eq.${prodId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              name: body.name,
+              brand: body.brand,
+              category: body.category,
+              sub_category: body.subCategory,
+              barcode: body.barcode,
+              sku: body.sku,
+              images: body.images,
+              unit: body.unit,
+              mrp: Number(body.mrp),
+              selling_price: Number(body.sellingPrice),
+              cost_price: Number(body.costPrice || body.cost_price || 0),
+              is_pantry_eligible: body.orderEligibility !== 'QUICK_ONLY',
+              is_quick_order_eligible: body.orderEligibility !== 'PANTRY_ONLY',
+              status: body.status,
+              description: body.description,
+              updated_at: new Date().toISOString(),
+            }),
+          });
+          return body as unknown as T;
+        }
+      }
+
+      if (method === 'DELETE') {
+        const idMatch = cleanUrl.match(/\/api\/products\/([^/]+)/);
+        const prodId = idMatch ? idMatch[1] : null;
+        if (prodId) {
+          await querySupabaseRest(`products?id=eq.${prodId}`, {
+            method: 'DELETE',
+          });
+          return { success: true, message: 'Product deleted successfully', productId: prodId } as unknown as T;
+        }
       }
     }
 
@@ -2142,6 +2187,8 @@ function formatProductsFromSupabase(relData: any[]): Product[] {
       description: p.description || '',
       hsn: p.hsn || '1006',
       barcode: p.barcode || String(Math.floor(100000000000 + Math.random() * 900000000000)),
+      sku: p.sku || '',
+      costPrice: Number(p.cost_price || p.costPrice || 0),
       mrp: mrpVal,
       sellingPrice: sellingPriceVal,
       discount: discountVal,
