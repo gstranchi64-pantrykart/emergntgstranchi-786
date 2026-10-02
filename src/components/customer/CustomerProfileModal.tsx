@@ -92,7 +92,18 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   defaultTab = 'profile',
   onNavigateToOrders,
 }) => {
-  const { customer, user, logout, updateCustomerState } = useAuth();
+  const { customer: rawCustomer, user, logout, updateCustomerState } = useAuth();
+  const customer = rawCustomer || ({
+    id: user?.id || 'N/A',
+    fullName: user?.name || 'User Profile',
+    mobile: user?.mobile || '',
+    email: (user as any)?.email || '',
+    walletBalance: 0,
+    pantryLimit: 0,
+    availablePantryLimit: 0,
+    address: '',
+    status: 'ACTIVE',
+  } as any);
   const [activeTab, setActiveTab] = useState<
     | 'profile'
     | 'address'
