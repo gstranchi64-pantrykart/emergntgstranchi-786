@@ -42,8 +42,17 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - FIX 3 (auditor portal): used-tab filters + replacement used-item matching now include status CONSUMED_AND_PAID (previously only qty===0).
 - VERIFIED E2E in browser: paid Horlicks ₹285 via demo Razorpay → instantly moved to Used tab (4→5), Payment History (4) loads, stats correct. Used badges render correctly.
 
+## Auditor Bill Settlement fix (2026-10-02) — VERIFIED by testing agent (5/5 pass)
+- ROOT CAUSE: submitAuditorCheck applied wallet deduction + stock change IMMEDIATELY on auditor submit, but stored walletDeducted:false, so confirmAuditBillByCustomer deducted AGAIN = double deduction + double stock reduction.
+- FIX: submitAuditorCheck is now estimate-only (no wallet/stock/limit mutation). confirmAuditBillByCustomer applies all effects ONCE on customer approval: missing->wallet deduct (qty*price) + stock reduce + auditMissingHold; return->approveAndCompleteReturn (limit restore + stock reduce + auditor return order); replacement->transfer matched Used item back into In-Stock.
+- Verified: submit causes NO change; confirm deducts wallet once (1000->815), return raises limit (8823->9088), second confirm is NO-OP (bill LOCKED). Wallet(1000) & Limit(10000) are independent.
+
+## Pantry Limit & Wallet Statements (2026-10-02)
+- Limit model: usedPantryLimit = stockValuation + inTransit + auditMissingHold (missing stays locked, return/pantry-pay free the cap) — matches user's buying-cap model.
+- Added PANTRY_PAY_CREDIT ledger entry: every Pantry Pay product payment now writes a Limit Statement row (opening->closing limit) with date+time. Wallet statement already logs AUDIT_DEDUCTION/recharge with date+time. Both statements render date+time in customer Profile (Wallet History + Limit & Ledger tabs). Verified visually.
+
 ## Backlog / Next
-- P1: Real Razorpay keys (user to provide rzp_test / rzp_live key_id + secret) to replace the demo gateway with a genuine create-order + signature-verify flow
+- P1: Real Razorpay keys (user to provide) to replace demo gateway
+- P1: Backfill date/time on OLD seed ledger entries (currently show blank date)
 - P1: Other DEMO integrations (MSG91 SMS, WhatsApp, Google Maps)
 - P2: Push code to GitHub repo pantrykartlive-12345 via Save to GitHub UI
-- Minor: Pantry Pay error message visibility (renders below pills; add scrollIntoView)

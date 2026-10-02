@@ -6601,6 +6601,14 @@ export class BusinessService {
     } else {
       // If direct product consumption payment, reduce physical home pantry stock
       const targetCustId = customer ? customer.id : payload.customerId;
+
+      // Capture the customer's available pantry credit limit BEFORE consuming stock,
+      // so the Limit Statement ledger entry can show correct opening/closing (with date & time).
+      let availLimitBefore = 0;
+      if (customer) {
+        availLimitBefore = this.syncChildCustomerWithParent(customer, db).availablePantryLimit || 0;
+      }
+
       const pci = db.pantryCardItems.find(
         (p) =>
           p.customerId === targetCustId &&
@@ -6610,6 +6618,7 @@ export class BusinessService {
       );
       if (pci) {
         const deductQty = (payload as any).quantity || 1;
+        const creditRestored = (payload as any).amount ?? deductQty * (pci.unitPrice || 0);
         pci.quantity = Math.max(0, (pci.quantity || 0) - deductQty);
         pci.updatedAt = getToday();
 
@@ -6643,6 +6652,32 @@ export class BusinessService {
           updatedAt: getToday(),
         };
         db.pantryCardItems.unshift(usedPci);
+
+        // Record a Pantry Limit Statement entry: paying via Pantry Pay RESTORES the buying cap
+        // (credit limit increases by the paid amount). Wallet is NOT touched by product payment.
+        if (customer) {
+          const now = new Date();
+          const openingLimit = availLimitBefore;
+          const closingLimit = openingLimit + creditRestored;
+          if (!db.pantryCreditLedger) db.pantryCreditLedger = [];
+          db.pantryCreditLedger.unshift({
+            id: `PCL-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+            customerId: customer.id,
+            transactionType: 'PANTRY_PAY_CREDIT',
+            openingLimit,
+            amount: creditRestored,
+            closingLimit,
+            balanceAfter: closingLimit,
+            referenceId: payId,
+            description: `Pantry Pay payment: ${deductQty}x ${payload.productName || pci.productName} paid ₹${creditRestored} — credit limit restored`,
+            date: now.toISOString().split('T')[0],
+            time: getNowTimeWithSeconds(),
+            createdAt: now.toISOString(),
+          });
+          // Keep stored fields roughly in sync (the dynamic read recomputes anyway).
+          customer.availablePantryLimit = closingLimit;
+          customer.updatedAt = getToday();
+        }
       }
     }
 

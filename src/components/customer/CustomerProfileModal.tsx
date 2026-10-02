@@ -514,7 +514,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
     .filter((l) => {
       if (ledgerFilter === 'ALL') return true;
       if (ledgerFilter === 'ORDER_DEBIT') return l.transactionType === 'PANTRY_ORDER_DEBIT' || (l as any).type === 'ORDER_DEBIT';
-      if (ledgerFilter === 'PAYMENT_CREDIT') return l.transactionType === 'AUDIT_CREDIT_RESTORE' || l.transactionType === 'RETURN_CREDIT' || (l as any).type === 'PAYMENT_CREDIT';
+      if (ledgerFilter === 'PAYMENT_CREDIT') return l.transactionType === 'AUDIT_CREDIT_RESTORE' || l.transactionType === 'RETURN_CREDIT' || l.transactionType === 'PANTRY_PAY_CREDIT' || (l as any).type === 'PAYMENT_CREDIT';
       if (ledgerFilter === 'AUDIT_DEDUCTION') return (l as any).transactionType === 'AUDIT_DEDUCTION' || (l as any).type === 'AUDIT_DEDUCTION';
       return true;
     });
@@ -1363,6 +1363,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                     const isCredit =
                       entry.transactionType === 'RETURN_CREDIT' ||
                       entry.transactionType === 'AUDIT_CREDIT_RESTORE' ||
+                      entry.transactionType === 'PANTRY_PAY_CREDIT' ||
                       entry.transactionType === 'INITIAL_LIMIT' ||
                       (entry as any).type === 'PAYMENT_CREDIT' ||
                       entry.amount > 0;
