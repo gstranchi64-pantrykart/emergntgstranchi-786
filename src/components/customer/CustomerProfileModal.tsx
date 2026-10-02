@@ -2127,7 +2127,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
 
               {/* KPI Summary Cards */}
               {(() => {
-                const activeStock = pantryItems.filter((i) => i.quantity > 0);
+                const activeStock = pantryItems.filter((i) => i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID');
                 const usedStock = filterUsedPantryItems(pantryItems);
                 const activeUnits = activeStock.reduce((acc, i) => acc + (i.quantity || 0), 0);
                 const stockValuation = activeStock.reduce((acc, i) => acc + (i.quantity || 0) * (i.unitPrice || 0), 0);
@@ -2260,7 +2260,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                     <div className="py-16 text-center text-slate-400 text-xs">Loading pantry stock items...</div>
                   ) : (() => {
                     const basePool = stockSubTab === 'inStock'
-                      ? pantryItems.filter((i) => i.quantity > 0)
+                      ? pantryItems.filter((i) => i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID')
                       : filterUsedPantryItems(pantryItems);
 
                     const list = basePool.filter((i) => {
@@ -2329,10 +2329,15 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                                     <h4 className="font-bold text-slate-900 text-sm truncate mt-0.5">
                                       {it.productName}
                                     </h4>
-                                    <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                       <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-mono font-bold text-[10px]">
                                         Batch #{it.batchNumber}
                                       </span>
+                                      {it.barcode && (
+                                        <span className="text-[10px] text-slate-500 font-mono flex items-center gap-0.5 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-black">
+                                          Barcode: {it.barcode}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -2705,7 +2710,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
           {/* TAB: PANTRY PAY SCANNER */}
           {hasPantryAccess(customer) && activeTab === 'pantryPay' && (
             <div>
-              <PantryPayScannerUI customer={customer} />
+              <PantryPayScannerUI customer={customer} onPaymentComplete={fetchAllCustomerData} />
             </div>
           )}
 

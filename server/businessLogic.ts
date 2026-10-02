@@ -3502,12 +3502,12 @@ export class BusinessService {
     const familySet = new Set(targetIds);
     const rawItems = db.pantryCardItems.filter((i) => familySet.has(i.customerId));
 
-    // Active Stock (Quantity > 0)
-    const activeItems = rawItems.filter((i) => i.quantity > 0);
+    // Active Stock (Quantity > 0 and not marked consumed)
+    const activeItems = rawItems.filter((i) => i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID');
 
-    // Used / Consumed Stock (Quantity === 0)
+    // Used / Consumed Stock (Quantity === 0 or marked as consumed and paid)
     // 1. Sort by most recent first
-    const usedItems = rawItems.filter((i) => (i.quantity || 0) === 0);
+    const usedItems = rawItems.filter((i) => (i.quantity || 0) === 0 || i.status === 'CONSUMED_AND_PAID');
     const sortedUsed = [...usedItems].sort((a, b) => {
       const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime() || 0;
       const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime() || 0;
@@ -6691,42 +6691,39 @@ export class BusinessService {
       );
       if (pci) {
         const deductQty = (payload as any).quantity || 1;
-        const originalQty = pci.quantity;
         pci.quantity = Math.max(0, (pci.quantity || 0) - deductQty);
-        if (pci.quantity === 0) {
-          pci.status = 'CONSUMED_AND_PAID';
-        }
         pci.updatedAt = getToday();
 
-        // Only create a duplicate used item if the original is still partially active (qty > 0)
-        // because if the original is fully consumed (qty == 0), the original itself goes to the Used Box!
-        const remainingQty = originalQty - deductQty;
-        if (remainingQty > 0) {
-          const usedPci: PantryCardItem = {
-            id: `PCI-PPAY-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
-            customerId: pci.customerId,
-            customerName: pci.customerName,
-            orderId: pci.orderId,
-            productId: pci.productId,
-            productName: `${pci.productName} (Pantry Pay)`,
-            brand: pci.brand,
-            weightSize: pci.weightSize,
-            barcode: pci.barcode,
-            batchId: pci.batchId,
-            batchNumber: pci.batchNumber,
-            manufacturingDate: pci.manufacturingDate || '',
-            expiryDate: pci.expiryDate || '',
-            image: pci.image,
-            quantity: 0, // 0 quantity so it goes to Used History Box
-            unitPrice: pci.unitPrice,
-            totalValue: 0,
-            deliveryDate: pci.deliveryDate,
-            status: 'CONSUMED_AND_PAID', // marked as used & paid
-            createdAt: getToday(),
-            updatedAt: getToday(),
-          };
-          db.pantryCardItems.unshift(usedPci);
+        // If completely consumed, remove original item from DB to prevent duplicates/empty active items
+        if (pci.quantity === 0) {
+          db.pantryCardItems = db.pantryCardItems.filter((item) => item.id !== pci.id);
         }
+
+        // Always create a specific used record that represents the exact paid/consumed quantity
+        const usedPci: PantryCardItem = {
+          id: `PCI-PPAY-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+          customerId: pci.customerId,
+          customerName: pci.customerName,
+          orderId: pci.orderId,
+          productId: pci.productId,
+          productName: `${pci.productName} (Pantry Pay)`,
+          brand: pci.brand,
+          weightSize: pci.weightSize,
+          barcode: pci.barcode,
+          batchId: pci.batchId,
+          batchNumber: pci.batchNumber,
+          manufacturingDate: pci.manufacturingDate || '',
+          expiryDate: pci.expiryDate || '',
+          image: pci.image,
+          quantity: deductQty, // Record the exact quantity paid and consumed!
+          unitPrice: pci.unitPrice,
+          totalValue: pci.unitPrice * deductQty,
+          deliveryDate: pci.deliveryDate,
+          status: 'CONSUMED_AND_PAID', // marked as consumed and paid
+          createdAt: getToday(),
+          updatedAt: getToday(),
+        };
+        db.pantryCardItems.unshift(usedPci);
       }
     }
 

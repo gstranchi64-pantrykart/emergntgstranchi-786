@@ -760,7 +760,7 @@ export const PantryCardPortal: React.FC = () => {
 
           {/* Quick KPI Summary Cards */}
           {(() => {
-            const activeItems = pantryItems.filter((i) => i.quantity > 0);
+            const activeItems = pantryItems.filter((i) => i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID');
             const usedItems = filterUsedPantryItems(pantryItems);
             const totalActiveQty = activeItems.reduce((acc, i) => acc + (i.quantity || 0), 0);
             const totalActiveValuation = activeItems.reduce((acc, i) => acc + (i.quantity || 0) * (i.unitPrice || 0), 0);
@@ -938,7 +938,7 @@ export const PantryCardPortal: React.FC = () => {
                 <div className="py-16 text-center text-slate-400 text-xs">Loading pantry inventory...</div>
               ) : (() => {
                 const basePool = pantrySubTab === 'active'
-                  ? pantryItems.filter((i) => i.quantity > 0)
+                  ? pantryItems.filter((i) => i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID')
                   : filterUsedPantryItems(pantryItems);
 
                 const targetList = basePool.filter((i) => {

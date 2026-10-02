@@ -618,7 +618,7 @@ export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
             </button>
             <div className="p-6">
               {customer ? (
-                <PantryPayScannerUI customer={customer} />
+                <PantryPayScannerUI customer={customer} onPaymentComplete={refreshUserData} />
               ) : (
                 <div className="text-center py-6 text-xs text-slate-500">Please log in as customer to use Pantry Pay.</div>
               )}

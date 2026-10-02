@@ -9,8 +9,8 @@ import { PantryCardItem } from '../types';
 export const filterUsedPantryItems = <T extends PantryCardItem>(items: T[]): T[] => {
   if (!items || items.length === 0) return [];
 
-  // Filter 0-quantity items
-  const used = items.filter((i) => (i.quantity || 0) === 0);
+  // Filter 0-quantity items or items marked as consumed and paid
+  const used = items.filter((i) => (i.quantity || 0) === 0 || i.status === 'CONSUMED_AND_PAID');
 
   // Sort latest first
   const sorted = [...used].sort((a, b) => {
