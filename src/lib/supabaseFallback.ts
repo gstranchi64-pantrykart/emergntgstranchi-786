@@ -11,6 +11,24 @@ const getSupabaseHeaders = () => ({
   'Prefer': 'return=representation',
 });
 
+const broadcastChannel =
+  typeof window !== 'undefined' && 'BroadcastChannel' in window
+    ? new BroadcastChannel('pantrymaster_realtime_sync')
+    : null;
+
+export function notifyLocalSubscribers(action: string, payload?: any) {
+  if (broadcastChannel) {
+    try {
+      broadcastChannel.postMessage({
+        type: 'DATABASE_MUTATION',
+        action,
+        timestamp: Date.now(),
+        payload,
+      });
+    } catch {}
+  }
+}
+
 // Default Demo Datasets for Automatic Supabase Seeding
 const DEFAULT_PRODUCTS_SUPABASE = [
   {
@@ -819,6 +837,7 @@ export function preheatSupabaseConnection() {
     }
 
     saveRamStoreToLocal();
+    notifyLocalSubscribers('PREHEAT_COMPLETE');
   });
 }
 
@@ -968,9 +987,23 @@ export async function handleDirectSupabaseFetch<T>(
           querySupabaseRest<any[]>('orders?select=*'),
         ]);
 
-        if (prods && prods.length > 0) ramStore.products = formatProductsFromSupabase(prods);
-        if (custs && custs.length > 0) ramStore.customers = formatCustomersFromSupabase(custs);
-        if (ords && ords.length > 0) ramStore.orders = formatOrdersFromSupabase(ords);
+        let changed = false;
+        if (prods && prods.length > 0) {
+          ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(prods));
+          changed = true;
+        }
+        if (custs && custs.length > 0) {
+          ramStore.customers = mergeArraysById(ramStore.customers, formatCustomersFromSupabase(custs));
+          changed = true;
+        }
+        if (ords && ords.length > 0) {
+          ramStore.orders = mergeArraysById(ramStore.orders, formatOrdersFromSupabase(ords));
+          changed = true;
+        }
+        if (changed) {
+          saveRamStoreToLocal();
+          notifyLocalSubscribers('SUMMARY_SYNC_COMPLETE');
+        }
       });
 
       return summaryObj as unknown as T;
@@ -984,6 +1017,7 @@ export async function handleDirectSupabaseFetch<T>(
           if (data && data.length > 0) {
             ramStore.batches = mergeArraysById(ramStore.batches, formatBatchesFromSupabase(data));
             saveRamStoreToLocal();
+            notifyLocalSubscribers('UPDATE_BATCHES', ramStore.batches);
           }
         });
 
@@ -1262,6 +1296,7 @@ export async function handleDirectSupabaseFetch<T>(
           if (data && data.length > 0) {
             ramStore.purchases = mergeArraysById(ramStore.purchases, formatPurchasesFromSupabase(data));
             saveRamStoreToLocal();
+            notifyLocalSubscribers('UPDATE_PURCHASES', ramStore.purchases);
           }
         });
 
@@ -1430,7 +1465,9 @@ export async function handleDirectSupabaseFetch<T>(
         triggerBackgroundTask(async () => {
           const relData = await querySupabaseRest<any[]>('products?select=*');
           if (relData) {
-            ramStore.products = formatProductsFromSupabase(relData);
+            ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(relData));
+            saveRamStoreToLocal();
+            notifyLocalSubscribers('UPDATE_PRODUCTS', ramStore.products);
           }
         });
 
@@ -1440,8 +1477,8 @@ export async function handleDirectSupabaseFetch<T>(
 
         const relData = await querySupabaseRest<any[]>('products?select=*');
         if (relData) {
-          ramStore.products = formatProductsFromSupabase(relData);
-          return ramStore.products as unknown as T;
+          ramStore.products = mergeArraysById(ramStore.products, formatProductsFromSupabase(relData));
+          return saveAndReturn(ramStore.products) as unknown as T;
         }
 
         return [] as unknown as T;
