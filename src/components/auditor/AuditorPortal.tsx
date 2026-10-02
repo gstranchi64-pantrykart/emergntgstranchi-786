@@ -520,7 +520,7 @@ export const AuditorPortal: React.FC = () => {
     if (field === 'qtyReplacement') {
       const matchingUsed = pantryItems.filter(
         (u) =>
-          u.quantity === 0 &&
+          (u.quantity === 0 || u.status === 'CONSUMED_AND_PAID') &&
           u.barcode &&
           item.barcode &&
           u.barcode.trim().toLowerCase() === item.barcode.trim().toLowerCase()
@@ -679,7 +679,7 @@ export const AuditorPortal: React.FC = () => {
       
       const matchingUsed = pantryItems.filter(
         (u) =>
-          u.quantity === 0 &&
+          (u.quantity === 0 || u.status === 'CONSUMED_AND_PAID') &&
           u.barcode &&
           item.barcode &&
           u.barcode.trim().toLowerCase() === item.barcode.trim().toLowerCase()
@@ -1480,7 +1480,7 @@ export const AuditorPortal: React.FC = () => {
                         >
                           <span>Used History</span>
                           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-900 font-black">
-                            {pantryItems.filter((i) => i.quantity === 0).length}
+                            {pantryItems.filter((i) => i.quantity === 0 || i.status === 'CONSUMED_AND_PAID').length}
                           </span>
                         </button>
 
@@ -1671,7 +1671,7 @@ export const AuditorPortal: React.FC = () => {
                     }
 
                     const currentList = pantryItems.filter((i) => {
-                      const matchesTab = pantrySubTab === 'active' ? i.quantity > 0 : i.quantity === 0;
+                      const matchesTab = pantrySubTab === 'active' ? (i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID') : (i.quantity === 0 || i.status === 'CONSUMED_AND_PAID');
                       const q = (productSearchText || searchQuery).toLowerCase();
                       const matchesSearch = !q || (i.productName || '').toLowerCase().includes(q) || (i.barcode || '').includes(q) || (i.batchNumber || '').toLowerCase().includes(q);
 
@@ -1700,7 +1700,7 @@ export const AuditorPortal: React.FC = () => {
                       return matchesTab && matchesSearch;
                     });
 
-                    if (currentList.length === 0 && pantryItems.filter(i => pantrySubTab === 'active' ? i.quantity > 0 : i.quantity === 0).length === 0) {
+                    if (currentList.length === 0 && pantryItems.filter(i => pantrySubTab === 'active' ? (i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID') : (i.quantity === 0 || i.status === 'CONSUMED_AND_PAID')).length === 0) {
                       return (
                         <div className="py-12 text-center text-slate-400">
                           <ClipboardCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -1718,7 +1718,7 @@ export const AuditorPortal: React.FC = () => {
                       );
                     }
 
-                    const rawActiveCount = pantryItems.filter(i => pantrySubTab === 'active' ? i.quantity > 0 : i.quantity === 0).length;
+                    const rawActiveCount = pantryItems.filter(i => pantrySubTab === 'active' ? (i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID') : (i.quantity === 0 || i.status === 'CONSUMED_AND_PAID')).length;
 
                     return (
                       <div className="space-y-4">
@@ -2104,7 +2104,7 @@ export const AuditorPortal: React.FC = () => {
                                         {(() => {
                                           const matchingUsedItems = pantryItems.filter(
                                             (u) =>
-                                              u.quantity === 0 &&
+                                              (u.quantity === 0 || u.status === 'CONSUMED_AND_PAID') &&
                                               u.barcode &&
                                               item.barcode &&
                                               u.barcode.trim().toLowerCase() === item.barcode.trim().toLowerCase()

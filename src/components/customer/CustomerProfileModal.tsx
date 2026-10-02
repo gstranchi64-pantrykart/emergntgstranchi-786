@@ -2294,7 +2294,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                     return (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {list.map((it) => {
-                          const isUsed = it.quantity === 0;
+                          const isUsed = it.quantity === 0 || it.status === 'CONSUMED_AND_PAID';
                           return (
                             <div
                               key={it.id}
@@ -2307,7 +2307,9 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                                   {isUsed ? (
                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
                                       <Clock className="w-3 h-3 text-rose-600" />
-                                      USED / 0 QTY
+                                      {it.status === 'CONSUMED_AND_PAID'
+                                        ? `USED / CONSUMED & PAID (${it.quantity} ${it.quantity === 1 ? 'Unit' : 'Units'})`
+                                        : 'USED / 0 QTY'}
                                     </span>
                                   ) : (
                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">

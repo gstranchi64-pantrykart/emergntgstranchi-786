@@ -35,6 +35,13 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Fixed browser /api 502: Express now also listens on 8001 so the platform ingress (/api -> 8001) reaches the API from the public preview URL. Verified POST+GET /api/pantry-payments end-to-end via preview URL (200).
 - Razorpay kept as DEMO/simulated popup (user has NO real Razorpay keys — confirmed). Backend createPantryPayment consumes pantry stock -> CONSUMED_AND_PAID "used" record and logs to customer/admin/auditor history (verified via curl).
 
+## Bug Fix: Pantry Pay "Used/Consumed" not showing (2026-10-02)
+- ROOT CAUSE: browser read pantry-card via Supabase fallback layer which derives items from orders only (never reflects Pantry Pay). Writes went to Express local store. Split-brain read/write.
+- FIX 1 (api.ts): bypass handleDirectSupabaseFetch for /api/pantry-card/* and /api/pantry-payments* routes → browser now uses live Express backend (single source of truth).
+- FIX 2 (badge display): CONSUMED_AND_PAID records store the PAID quantity (qty>0), so badges keyed on qty===0 wrongly showed "IN PANTRY STOCK". Fixed in CustomerProfileModal, PantryCardPortal, admin CustomerManagement → now show "USED / CONSUMED & PAID (N Units)".
+- FIX 3 (auditor portal): used-tab filters + replacement used-item matching now include status CONSUMED_AND_PAID (previously only qty===0).
+- VERIFIED E2E in browser: paid Horlicks ₹285 via demo Razorpay → instantly moved to Used tab (4→5), Payment History (4) loads, stats correct. Used badges render correctly.
+
 ## Backlog / Next
 - P1: Real Razorpay keys (user to provide rzp_test / rzp_live key_id + secret) to replace the demo gateway with a genuine create-order + signature-verify flow
 - P1: Other DEMO integrations (MSG91 SMS, WhatsApp, Google Maps)

@@ -295,8 +295,12 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     if (options?.body) requestBodyParsed = JSON.parse(String(options.body));
   } catch {}
 
-  // Always prioritize direct Supabase Cloud DB PostgREST engine as Single Source of Truth
-  const directResult = await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
+  // Pantry Card & Pantry Pay must always talk to the live Express backend
+  // (single source of truth) so that payments instantly mark items CONSUMED_AND_PAID.
+  // The Supabase read-layer derives pantry items from orders and never reflects
+  // Pantry Pay consumption, so bypass it for these routes.
+  const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments)(\/|\?|$)/.test(url);
+  const directResult = isPantryLiveRoute ? null : await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
   if (directResult !== null) {
     return directResult;
   }

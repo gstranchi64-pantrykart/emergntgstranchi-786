@@ -1603,9 +1603,11 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConduc
                                           </div>
 
                                           <div className="text-right shrink-0">
-                                            {item.quantity === 0 ? (
+                                            {item.quantity === 0 || item.status === 'CONSUMED_AND_PAID' ? (
                                               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
-                                                USED / 0 QTY
+                                                {item.status === 'CONSUMED_AND_PAID'
+                                                  ? `USED / CONSUMED & PAID (${item.quantity} ${item.quantity === 1 ? 'Unit' : 'Units'})`
+                                                  : 'USED / 0 QTY'}
                                               </span>
                                             ) : (
                                               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
