@@ -204,6 +204,57 @@ const DEFAULT_CUSTOMERS_SUPABASE = [
     wallet_balance: 300,
     is_pantry_allowed: true,
     status: 'ACTIVE'
+  },
+  {
+    id: 'CUS-000004',
+    full_name: 'Sanjay Singh',
+    mobile: '7004123451',
+    email: 'sanjay.singh@example.com',
+    address: 'Sector 4, Bokaro Steel City',
+    city: 'Ranchi',
+    pincode: '834001',
+    state: 'Jharkhand',
+    area: 'Lalpur',
+    is_child_account: false,
+    pantry_limit: 10000,
+    pantry_used: 0,
+    wallet_balance: 1000,
+    is_pantry_allowed: true,
+    status: 'ACTIVE'
+  },
+  {
+    id: 'CUS-000005',
+    full_name: 'Kavita Kumari',
+    mobile: '7004123452',
+    email: 'kavita.k@example.com',
+    address: 'Albert Ekka Chowk, Main Road',
+    city: 'Ranchi',
+    pincode: '834001',
+    state: 'Jharkhand',
+    area: 'Main Road',
+    is_child_account: false,
+    pantry_limit: 15000,
+    pantry_used: 1200,
+    wallet_balance: 2000,
+    is_pantry_allowed: true,
+    status: 'ACTIVE'
+  },
+  {
+    id: 'CUS-000006',
+    full_name: 'Ravi Shankar',
+    mobile: '7004123453',
+    email: 'ravi.s@example.com',
+    address: 'Hehal, near ITI Bus Stand',
+    city: 'Ranchi',
+    pincode: '834005',
+    state: 'Jharkhand',
+    area: 'Hehal',
+    is_child_account: false,
+    pantry_limit: 8000,
+    pantry_used: 0,
+    wallet_balance: 500,
+    is_pantry_allowed: true,
+    status: 'ACTIVE'
   }
 ];
 
@@ -476,23 +527,41 @@ export function preheatSupabaseConnection() {
       querySupabaseRest<any[]>('categories?select=*'),
     ]);
 
-    if (prods && prods.length > 0) ramStore.products = formatProductsFromSupabase(prods);
-    else ramStore.products = formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+    if (prods && prods.length > 0) {
+      ramStore.products = formatProductsFromSupabase(prods);
+    } else if (!ramStore.products) {
+      ramStore.products = formatProductsFromSupabase(DEFAULT_PRODUCTS_SUPABASE);
+    }
 
-    if (custs && custs.length > 0) ramStore.customers = formatCustomersFromSupabase(custs);
-    else ramStore.customers = formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
+    if (custs && custs.length > 0) {
+      ramStore.customers = formatCustomersFromSupabase(custs);
+    } else if (!ramStore.customers) {
+      ramStore.customers = formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
+    }
 
-    if (ords && ords.length > 0) ramStore.orders = formatOrdersFromSupabase(ords);
-    else ramStore.orders = formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE);
+    if (ords && ords.length > 0) {
+      ramStore.orders = formatOrdersFromSupabase(ords);
+    } else if (!ramStore.orders) {
+      ramStore.orders = formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE);
+    }
 
-    if (auds && auds.length > 0) ramStore.auditors = formatAuditorsFromSupabase(auds);
-    else ramStore.auditors = formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE);
+    if (auds && auds.length > 0) {
+      ramStore.auditors = formatAuditorsFromSupabase(auds);
+    } else if (!ramStore.auditors) {
+      ramStore.auditors = formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE);
+    }
 
-    if (deliv && deliv.length > 0) ramStore.delivery = formatDeliveryFromSupabase(deliv);
-    else ramStore.delivery = formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE);
+    if (deliv && deliv.length > 0) {
+      ramStore.delivery = formatDeliveryFromSupabase(deliv);
+    } else if (!ramStore.delivery) {
+      ramStore.delivery = formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE);
+    }
 
-    if (cats && cats.length > 0) ramStore.categories = formatCategoriesFromSupabase(cats);
-    else ramStore.categories = formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE);
+    if (cats && cats.length > 0) {
+      ramStore.categories = formatCategoriesFromSupabase(cats);
+    } else if (!ramStore.categories) {
+      ramStore.categories = formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE);
+    }
   });
 }
 
@@ -888,7 +957,7 @@ export async function handleDirectSupabaseFetch<T>(
 
         triggerBackgroundTask(async () => {
           const data = await querySupabaseRest<any[]>('customers?select=*');
-          if (data) {
+          if (data && data.length > 0) {
             ramStore.customers = formatCustomersFromSupabase(data);
           }
         });
@@ -916,6 +985,115 @@ export async function handleDirectSupabaseFetch<T>(
           return ramStore.customers[0] as unknown as T;
         }
         return ramStore.customers as unknown as T;
+      }
+
+      if (method === 'POST' && body) {
+        if (cleanUrl.endsWith('/api/customers')) {
+          const newId = body.id || `CUS-${Date.now().toString().slice(-6)}`;
+          const newCustomer = {
+            id: newId,
+            full_name: body.fullName || body.name || 'Customer',
+            mobile: body.mobile,
+            email: body.email || '',
+            address: body.address || 'House #1, Ranchi',
+            city: body.city || 'Ranchi',
+            pincode: body.pinCode || body.pincode || '834001',
+            role: 'CUSTOMER',
+            status: body.status || 'ACTIVE',
+            has_pantry_card: body.isPantryAllowed !== false,
+            pantry_limit: Number(body.pantryLimit || 10000),
+            pantry_used: Number(body.usedPantryLimit || 0),
+            wallet_balance: Number(body.walletBalance || 1000),
+            parent_customer_id: body.parentCustomerId || null,
+            is_child_account: !!body.isChild,
+          };
+
+          const formatted = formatCustomersFromSupabase([newCustomer])[0];
+
+          if (Array.isArray(ramStore.customers)) {
+            ramStore.customers.unshift(formatted);
+          } else {
+            ramStore.customers = [formatted];
+          }
+
+          // Await synchronously to prevent race conditions!
+          await querySupabaseRest('customers', {
+            method: 'POST',
+            body: JSON.stringify([newCustomer]),
+          });
+
+          return formatted as unknown as T;
+        }
+
+        if (cleanUrl.includes('/children')) {
+          const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)\/children/);
+          const parentId = idMatch ? idMatch[1] : null;
+          if (parentId) {
+            const newId = `CUS-${Date.now().toString().slice(-6)}`;
+            const newCustomer = {
+              id: newId,
+              full_name: body.fullName || body.name || 'Family Member',
+              mobile: body.mobile,
+              email: body.email || '',
+              address: body.address || 'Ranchi',
+              city: body.city || 'Ranchi',
+              pincode: body.pinCode || body.pincode || '834001',
+              role: 'CUSTOMER',
+              status: body.status || 'ACTIVE',
+              has_pantry_card: true,
+              pantry_limit: Number(body.pantryLimit || 10000),
+              pantry_used: 0,
+              wallet_balance: Number(body.walletBalance || 1000),
+              parent_customer_id: parentId,
+              is_child_account: true,
+            };
+
+            const formatted = formatCustomersFromSupabase([newCustomer])[0];
+
+            if (Array.isArray(ramStore.customers)) {
+              ramStore.customers.unshift(formatted);
+            } else {
+              ramStore.customers = [formatted];
+            }
+
+            await querySupabaseRest('customers', {
+              method: 'POST',
+              body: JSON.stringify([newCustomer]),
+            });
+
+            return formatted as unknown as T;
+          }
+        }
+      }
+
+      if (method === 'PUT' && body) {
+        const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)/);
+        const custId = idMatch ? idMatch[1] : null;
+        if (custId && !cleanUrl.includes('/children')) {
+          if (Array.isArray(ramStore.customers)) {
+            ramStore.customers = ramStore.customers.map((c: any) => c.id === custId ? { ...c, ...body } : c);
+          }
+
+          const cleanCustomer: any = {};
+          if (body.fullName !== undefined || body.name !== undefined) cleanCustomer.full_name = body.fullName || body.name;
+          if (body.mobile !== undefined) cleanCustomer.mobile = body.mobile;
+          if (body.email !== undefined) cleanCustomer.email = body.email;
+          if (body.address !== undefined) cleanCustomer.address = body.address;
+          if (body.city !== undefined) cleanCustomer.city = body.city;
+          if (body.pinCode !== undefined || body.pincode !== undefined) cleanCustomer.pincode = body.pinCode || body.pincode;
+          if (body.status !== undefined) cleanCustomer.status = body.status;
+          if (body.pantryLimit !== undefined) cleanCustomer.pantry_limit = Number(body.pantryLimit);
+          if (body.usedPantryLimit !== undefined) cleanCustomer.pantry_used = Number(body.usedPantryLimit);
+          if (body.walletBalance !== undefined) cleanCustomer.wallet_balance = Number(body.walletBalance);
+          if (body.isPantryAllowed !== undefined) cleanCustomer.has_pantry_card = !!body.isPantryAllowed;
+
+          await querySupabaseRest(`customers?id=eq.${custId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(cleanCustomer),
+          });
+
+          return { ...body, id: custId } as unknown as T;
+        }
       }
     }
 
@@ -976,11 +1154,10 @@ export async function handleDirectSupabaseFetch<T>(
             ramStore.auditors = [formatted];
           }
 
-          triggerBackgroundTask(async () => {
-            await querySupabaseRest('auditors', {
-              method: 'POST',
-              body: JSON.stringify([newAuditor]),
-            });
+          // Await synchronously to prevent race conditions!
+          await querySupabaseRest('auditors', {
+            method: 'POST',
+            body: JSON.stringify([newAuditor]),
           });
 
           return formatted as unknown as T;
@@ -995,19 +1172,17 @@ export async function handleDirectSupabaseFetch<T>(
             ramStore.auditors = ramStore.auditors.map((a: any) => a.id === audId ? { ...a, ...body } : a);
           }
 
-          triggerBackgroundTask(async () => {
-            const cleanAuditor: any = {};
-            if (body.fullName !== undefined || body.name !== undefined) cleanAuditor.full_name = body.fullName || body.name;
-            if (body.mobile !== undefined) cleanAuditor.mobile = body.mobile;
-            if (body.email !== undefined) cleanAuditor.email = body.email;
-            if (body.assignedZone !== undefined) cleanAuditor.assigned_zone = body.assignedZone;
-            if (body.assignedCustomerIds !== undefined) cleanAuditor.assigned_customer_ids = body.assignedCustomerIds;
-            if (body.status !== undefined) cleanAuditor.status = body.status;
+          const cleanAuditor: any = {};
+          if (body.fullName !== undefined || body.name !== undefined) cleanAuditor.full_name = body.fullName || body.name;
+          if (body.mobile !== undefined) cleanAuditor.mobile = body.mobile;
+          if (body.email !== undefined) cleanAuditor.email = body.email;
+          if (body.assignedZone !== undefined) cleanAuditor.assigned_zone = body.assignedZone;
+          if (body.assignedCustomerIds !== undefined) cleanAuditor.assigned_customer_ids = body.assignedCustomerIds;
+          if (body.status !== undefined) cleanAuditor.status = body.status;
 
-            await querySupabaseRest(`auditors?id=eq.${audId}`, {
-              method: 'PATCH',
-              body: JSON.stringify(cleanAuditor),
-            });
+          await querySupabaseRest(`auditors?id=eq.${audId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(cleanAuditor),
           });
 
           return { ...body, id: audId } as unknown as T;
@@ -1069,11 +1244,10 @@ export async function handleDirectSupabaseFetch<T>(
           ramStore.delivery = [formatted];
         }
 
-        triggerBackgroundTask(async () => {
-          await querySupabaseRest('delivery_boys', {
-            method: 'POST',
-            body: JSON.stringify([newDeliveryBoy]),
-          });
+        // Await synchronously to prevent race conditions!
+        await querySupabaseRest('delivery_boys', {
+          method: 'POST',
+          body: JSON.stringify([newDeliveryBoy]),
         });
 
         return formatted as unknown as T;
@@ -1087,19 +1261,17 @@ export async function handleDirectSupabaseFetch<T>(
             ramStore.delivery = ramStore.delivery.map((d: any) => d.id === dBoyId ? { ...d, ...body } : d);
           }
 
-          triggerBackgroundTask(async () => {
-            const cleanDBoy: any = {};
-            if (body.fullName !== undefined || body.name !== undefined) cleanDBoy.full_name = body.fullName || body.name;
-            if (body.mobile !== undefined) cleanDBoy.mobile = body.mobile;
-            if (body.assignedArea !== undefined) cleanDBoy.assigned_area = body.assignedArea;
-            if (body.vehicleType !== undefined) cleanDBoy.vehicle_type = body.vehicleType;
-            if (body.vehicleNumber !== undefined) cleanDBoy.vehicle_number = body.vehicleNumber;
-            if (body.status !== undefined) cleanDBoy.status = body.status;
+          const cleanDBoy: any = {};
+          if (body.fullName !== undefined || body.name !== undefined) cleanDBoy.full_name = body.fullName || body.name;
+          if (body.mobile !== undefined) cleanDBoy.mobile = body.mobile;
+          if (body.assignedArea !== undefined) cleanDBoy.assigned_area = body.assignedArea;
+          if (body.vehicleType !== undefined) cleanDBoy.vehicle_type = body.vehicleType;
+          if (body.vehicleNumber !== undefined) cleanDBoy.vehicle_number = body.vehicleNumber;
+          if (body.status !== undefined) cleanDBoy.status = body.status;
 
-            await querySupabaseRest(`delivery_boys?id=eq.${dBoyId}`, {
-              method: 'PATCH',
-              body: JSON.stringify(cleanDBoy),
-            });
+          await querySupabaseRest(`delivery_boys?id=eq.${dBoyId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(cleanDBoy),
           });
 
           return { ...body, id: dBoyId } as unknown as T;
