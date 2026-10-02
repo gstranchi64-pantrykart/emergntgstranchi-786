@@ -57,7 +57,7 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Not-real-blockers (left as-is): preview supervisor conf (read-only, not in build context) and .gitignore blocking .env (intentional — keeps secrets out of public GitHub; deployer reads from live mount).
 
 ## Backlog / Next
-- P0: REDEPLOY — backend/.env now exists so `read envs` step should pass
+- P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway
 - P1: Backfill date/time on OLD seed ledger entries
 - P1: Other DEMO integrations (MSG91 SMS, WhatsApp, Google Maps)
