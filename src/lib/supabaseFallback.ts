@@ -240,6 +240,39 @@ const DEFAULT_AUDITORS_SUPABASE = [
     joining_date: '2024-04-10',
     status: 'ACTIVE',
     total_checks_conducted: 64
+  },
+  {
+    id: 'AUD-000004',
+    full_name: 'Ramesh Pathak (Senior Auditor)',
+    mobile: '7890123456',
+    email: 'ramesh.p@quickpantry.in',
+    assigned_zone: 'East Ranchi (Kokar)',
+    assigned_customer_ids: ['CUS-000002'],
+    joining_date: '2025-01-10',
+    status: 'ACTIVE',
+    total_checks_conducted: 12
+  },
+  {
+    id: 'AUD-000005',
+    full_name: 'Karan Johar (Field Auditor)',
+    mobile: '7890123457',
+    email: 'karan.j@quickpantry.in',
+    assigned_zone: 'South Ranchi',
+    assigned_customer_ids: [],
+    joining_date: '2025-02-15',
+    status: 'ACTIVE',
+    total_checks_conducted: 0
+  },
+  {
+    id: 'AUD-000006',
+    full_name: 'Sunita Rao (Auditor)',
+    mobile: '7890123458',
+    email: 'sunita.r@quickpantry.in',
+    assigned_zone: 'Morabadi Zone',
+    assigned_customer_ids: [],
+    joining_date: '2025-03-01',
+    status: 'ACTIVE',
+    total_checks_conducted: 5
   }
 ];
 
@@ -263,6 +296,36 @@ const DEFAULT_DELIVERY_SUPABASE = [
     vehicle_number: 'JH01-EX-8821',
     status: 'ACTIVE',
     joining_date: '2024-04-05'
+  },
+  {
+    id: 'DEL-000003',
+    full_name: 'Vijay Singh (Express Rider)',
+    mobile: '8901234561',
+    assigned_area: 'Bariatu & Kokar',
+    vehicle_type: 'BIKE',
+    vehicle_number: 'JH01-MZ-2048',
+    status: 'ACTIVE',
+    joining_date: '2025-01-20'
+  },
+  {
+    id: 'DEL-000004',
+    full_name: 'Arjun Prasad (EV Partner)',
+    mobile: '8901234562',
+    assigned_area: 'Morabadi Area',
+    vehicle_type: 'EV_SCOOTER',
+    vehicle_number: 'JH01-EV-3310',
+    status: 'ACTIVE',
+    joining_date: '2025-02-10'
+  },
+  {
+    id: 'DEL-000005',
+    full_name: 'Rahul Rawat (Delivery Captain)',
+    mobile: '8901234563',
+    assigned_area: 'Doranda & Argora',
+    vehicle_type: 'THREE_WHEELER',
+    vehicle_number: 'JH01-TR-4560',
+    status: 'ACTIVE',
+    joining_date: '2025-03-01'
   }
 ];
 
@@ -460,6 +523,79 @@ export async function handleDirectSupabaseFetch<T>(
           postgrestVerified: true,
           connectedAt: new Date().toISOString(),
         },
+      } as unknown as T;
+    }
+
+    // ---------------- 0.1 MOBILE VALIDATION API ----------------
+    if (cleanUrl.includes('/api/validation/check-mobile')) {
+      const urlObj = new URL(url, 'http://localhost');
+      const mobileParam = urlObj.searchParams.get('mobile') || '';
+      const excludeIdParam = urlObj.searchParams.get('excludeId') || '';
+      const clean = mobileParam.replace(/\D/g, '').slice(-10);
+
+      if (!clean || clean.length !== 10) {
+        return { available: false, error: 'Please enter a valid 10-digit mobile number' } as unknown as T;
+      }
+
+      const customersList = ramStore.customers || formatCustomersFromSupabase(DEFAULT_CUSTOMERS_SUPABASE);
+      const auditorsList = ramStore.auditors || formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE);
+      const deliveryList = ramStore.delivery || formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE);
+
+      let conflict: any = null;
+
+      const foundCustomer = customersList.find((c: any) => c.id !== excludeIdParam && (c.mobile?.replace(/\D/g, '').slice(-10) === clean));
+      if (foundCustomer) {
+        conflict = {
+          entityType: 'CUSTOMER',
+          id: foundCustomer.id,
+          name: foundCustomer.fullName,
+          role: 'CUSTOMER',
+          mobile: foundCustomer.mobile,
+          message: `Mobile number ${clean} is already registered with Customer "${foundCustomer.fullName}" (Customer ID: ${foundCustomer.id}).`,
+        };
+      }
+
+      if (!conflict) {
+        const foundAuditor = auditorsList.find((a: any) => a.id !== excludeIdParam && (a.mobile?.replace(/\D/g, '').slice(-10) === clean));
+        if (foundAuditor) {
+          conflict = {
+            entityType: 'AUDITOR',
+            id: foundAuditor.id,
+            name: foundAuditor.fullName,
+            role: 'AUDITOR',
+            mobile: foundAuditor.mobile,
+            message: `Mobile number ${clean} is already registered with Auditor "${foundAuditor.fullName}" (Auditor ID: ${foundAuditor.id}).`,
+          };
+        }
+      }
+
+      if (!conflict) {
+        const foundDelivery = deliveryList.find((d: any) => d.id !== excludeIdParam && (d.mobile?.replace(/\D/g, '').slice(-10) === clean));
+        if (foundDelivery) {
+          conflict = {
+            entityType: 'DELIVERY_BOY',
+            id: foundDelivery.id,
+            name: foundDelivery.fullName,
+            role: 'DELIVERY_BOY',
+            mobile: foundDelivery.mobile,
+            message: `Mobile number ${clean} is already registered with Delivery Partner "${foundDelivery.fullName}" (ID: ${foundDelivery.id}).`,
+          };
+        }
+      }
+
+      if (conflict) {
+        return {
+          available: false,
+          normalized: clean,
+          conflict,
+          error: conflict.message,
+        } as unknown as T;
+      }
+
+      return {
+        available: true,
+        normalized: clean,
+        message: 'Mobile number is available across the database',
       } as unknown as T;
     }
 
@@ -806,6 +942,77 @@ export async function handleDirectSupabaseFetch<T>(
         ramStore.auditors = formatAuditorsFromSupabase(DEFAULT_AUDITORS_SUPABASE);
         return ramStore.auditors as unknown as T;
       }
+
+      if (method === 'POST' && body) {
+        if (body.fullName || body.mobile || body.assignedZone) {
+          const newId = body.id || `AUD-${Date.now().toString(36).toUpperCase()}`;
+          const newAuditor = {
+            id: newId,
+            full_name: body.fullName || body.name || 'Field Auditor',
+            mobile: body.mobile,
+            email: body.email || '',
+            assigned_zone: body.assignedZone || 'All Ranchi Zones',
+            assigned_customer_ids: body.assignedCustomerIds || [],
+            joining_date: body.joiningDate || new Date().toISOString().split('T')[0],
+            status: body.status || 'ACTIVE',
+            total_checks_conducted: Number(body.totalChecksConducted || 0),
+          };
+
+          const formatted = {
+            id: newId,
+            fullName: newAuditor.full_name,
+            mobile: newAuditor.mobile,
+            email: newAuditor.email,
+            assignedZone: newAuditor.assigned_zone,
+            assignedCustomerIds: newAuditor.assigned_customer_ids,
+            joiningDate: newAuditor.joining_date,
+            status: newAuditor.status,
+            totalChecksConducted: newAuditor.total_checks_conducted,
+          };
+
+          if (Array.isArray(ramStore.auditors)) {
+            ramStore.auditors.push(formatted);
+          } else {
+            ramStore.auditors = [formatted];
+          }
+
+          triggerBackgroundTask(async () => {
+            await querySupabaseRest('auditors', {
+              method: 'POST',
+              body: JSON.stringify([newAuditor]),
+            });
+          });
+
+          return formatted as unknown as T;
+        }
+      }
+
+      if (method === 'PUT' && body) {
+        const idMatch = cleanUrl.match(/\/api\/auditors\/([^/]+)/);
+        const audId = idMatch ? idMatch[1] : null;
+        if (audId) {
+          if (Array.isArray(ramStore.auditors)) {
+            ramStore.auditors = ramStore.auditors.map((a: any) => a.id === audId ? { ...a, ...body } : a);
+          }
+
+          triggerBackgroundTask(async () => {
+            const cleanAuditor: any = {};
+            if (body.fullName !== undefined || body.name !== undefined) cleanAuditor.full_name = body.fullName || body.name;
+            if (body.mobile !== undefined) cleanAuditor.mobile = body.mobile;
+            if (body.email !== undefined) cleanAuditor.email = body.email;
+            if (body.assignedZone !== undefined) cleanAuditor.assigned_zone = body.assignedZone;
+            if (body.assignedCustomerIds !== undefined) cleanAuditor.assigned_customer_ids = body.assignedCustomerIds;
+            if (body.status !== undefined) cleanAuditor.status = body.status;
+
+            await querySupabaseRest(`auditors?id=eq.${audId}`, {
+              method: 'PATCH',
+              body: JSON.stringify(cleanAuditor),
+            });
+          });
+
+          return { ...body, id: audId } as unknown as T;
+        }
+      }
     }
 
     // ---------------- 7. DELIVERY BOY PANEL API ----------------
@@ -830,6 +1037,73 @@ export async function handleDirectSupabaseFetch<T>(
 
         ramStore.delivery = formatDeliveryFromSupabase(DEFAULT_DELIVERY_SUPABASE);
         return ramStore.delivery as unknown as T;
+      }
+
+      if (method === 'POST' && body) {
+        const newId = body.id || `DEL-${Date.now().toString(36).toUpperCase()}`;
+        const newDeliveryBoy = {
+          id: newId,
+          full_name: body.fullName || body.name || 'Delivery Partner',
+          mobile: body.mobile,
+          assigned_area: body.assignedArea || 'Central Zone',
+          vehicle_type: body.vehicleType || 'BIKE',
+          vehicle_number: body.vehicleNumber || 'JH01-1234',
+          status: body.status || 'ACTIVE',
+          joining_date: body.joiningDate || new Date().toISOString().split('T')[0],
+        };
+
+        const formatted = {
+          id: newId,
+          fullName: newDeliveryBoy.full_name,
+          mobile: newDeliveryBoy.mobile,
+          assignedArea: newDeliveryBoy.assigned_area,
+          vehicleType: newDeliveryBoy.vehicle_type,
+          vehicleNumber: newDeliveryBoy.vehicle_number,
+          status: newDeliveryBoy.status,
+          joiningDate: newDeliveryBoy.joining_date,
+        };
+
+        if (Array.isArray(ramStore.delivery)) {
+          ramStore.delivery.push(formatted);
+        } else {
+          ramStore.delivery = [formatted];
+        }
+
+        triggerBackgroundTask(async () => {
+          await querySupabaseRest('delivery_boys', {
+            method: 'POST',
+            body: JSON.stringify([newDeliveryBoy]),
+          });
+        });
+
+        return formatted as unknown as T;
+      }
+
+      if (method === 'PUT' && body) {
+        const idMatch = cleanUrl.match(/\/api\/delivery-boys\/([^/]+)/);
+        const dBoyId = idMatch ? idMatch[1] : null;
+        if (dBoyId) {
+          if (Array.isArray(ramStore.delivery)) {
+            ramStore.delivery = ramStore.delivery.map((d: any) => d.id === dBoyId ? { ...d, ...body } : d);
+          }
+
+          triggerBackgroundTask(async () => {
+            const cleanDBoy: any = {};
+            if (body.fullName !== undefined || body.name !== undefined) cleanDBoy.full_name = body.fullName || body.name;
+            if (body.mobile !== undefined) cleanDBoy.mobile = body.mobile;
+            if (body.assignedArea !== undefined) cleanDBoy.assigned_area = body.assignedArea;
+            if (body.vehicleType !== undefined) cleanDBoy.vehicle_type = body.vehicleType;
+            if (body.vehicleNumber !== undefined) cleanDBoy.vehicle_number = body.vehicleNumber;
+            if (body.status !== undefined) cleanDBoy.status = body.status;
+
+            await querySupabaseRest(`delivery_boys?id=eq.${dBoyId}`, {
+              method: 'PATCH',
+              body: JSON.stringify(cleanDBoy),
+            });
+          });
+
+          return { ...body, id: dBoyId } as unknown as T;
+        }
       }
     }
 
