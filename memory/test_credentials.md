@@ -17,3 +17,9 @@ Auth: Mobile OTP login. Demo mode bypass OTP: **123456** (or 1234, or the otpHin
 API login flow:
 1. POST /api/auth/verify-mobile {"mobile":"<10-digit>"} -> returns otpHint
 2. POST /api/auth/verify-otp {"mobile":"...","otp":"123456"} -> returns session token
+
+## Auditor Bill Flow (two separate balances)
+- WALLET (₹1000): auditor "Missing" deducts from here (qty x price). Limit unchanged.
+- PANTRY LIMIT (₹10000 cap): increases on RETURN and PANTRY PAY payment. Wallet unchanged.
+- Customer Ramesh CUS-000001 baseline: wallet=1000, pantryLimit=10000, availLimit=8823, usedLimit=1177
+- Active pantry items: PCI-001 Horlicks(q1,285), PCI-002 Aashirvaad(q1,265), PCI-003 Fortune(q1,152), PCI-004 Surf(q2,145), PCI-005 Dettol(q1,185)
