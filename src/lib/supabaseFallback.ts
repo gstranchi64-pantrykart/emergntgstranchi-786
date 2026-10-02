@@ -444,17 +444,56 @@ const DEFAULT_ORDERS_SUPABASE = [
   }
 ];
 
-// Single Source of Truth RAM memory cache
-const ramStore: Record<string, any> = {
-  products: null,
-  customers: null,
-  orders: null,
-  batches: null,
-  auditors: null,
-  delivery: null,
-  categories: null,
-  summary: null,
+// Single Source of Truth RAM memory cache with LocalStorage persistence backup
+const getInitialStore = () => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('pantrymaster_ram_store');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            products: parsed.products || null,
+            customers: parsed.customers || null,
+            orders: parsed.orders || null,
+            batches: parsed.batches || null,
+            auditors: parsed.auditors || null,
+            delivery: parsed.delivery || null,
+            categories: parsed.categories || null,
+            summary: parsed.summary || null,
+          };
+        }
+      } catch {}
+    }
+  }
+  return {
+    products: null,
+    customers: null,
+    orders: null,
+    batches: null,
+    auditors: null,
+    delivery: null,
+    categories: null,
+    summary: null,
+  };
 };
+
+const ramStore = getInitialStore();
+
+export function saveRamStoreToLocal() {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('pantrymaster_ram_store', JSON.stringify(ramStore));
+    } catch (e) {
+      console.warn('[LocalStorage Save Error]', e);
+    }
+  }
+}
+
+function saveAndReturn<T>(result: T): T {
+  saveRamStoreToLocal();
+  return result;
+}
 
 async function querySupabaseRest<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
   try {
@@ -470,6 +509,15 @@ async function querySupabaseRest<T>(endpoint: string, options: RequestInit = {})
         return {} as unknown as T;
       }
       return (await res.json()) as T;
+    } else {
+      const errText = await res.text();
+      console.warn(`[Supabase REST Error] Path: ${endpoint} Status: ${res.status}`, errText);
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson && errJson.message) {
+          console.warn(`[Supabase Hint] ${errJson.message} (Code: ${errJson.code || ''})`);
+        }
+      } catch {}
     }
   } catch (err) {
     console.warn('[Direct Supabase PostgREST Note]', err);
@@ -565,6 +613,8 @@ export function preheatSupabaseConnection() {
     } else if (!ramStore.categories) {
       ramStore.categories = formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE);
     }
+
+    saveRamStoreToLocal();
   });
 }
 
@@ -1025,7 +1075,7 @@ export async function handleDirectSupabaseFetch<T>(
             body: JSON.stringify([newCustomer]),
           });
 
-          return formatted as unknown as T;
+          return saveAndReturn(formatted as unknown as T);
         }
 
         if (cleanUrl.includes('/children')) {
@@ -1064,7 +1114,7 @@ export async function handleDirectSupabaseFetch<T>(
               body: JSON.stringify([newCustomer]),
             });
 
-            return formatted as unknown as T;
+            return saveAndReturn(formatted as unknown as T);
           }
         }
       }
@@ -1095,7 +1145,7 @@ export async function handleDirectSupabaseFetch<T>(
             body: JSON.stringify(cleanCustomer),
           });
 
-          return { ...body, id: custId } as unknown as T;
+          return saveAndReturn({ ...body, id: custId } as unknown as T);
         }
       }
 
@@ -1109,7 +1159,7 @@ export async function handleDirectSupabaseFetch<T>(
           await querySupabaseRest(`customers?id=eq.${custId}`, {
             method: 'DELETE',
           });
-          return { success: true, message: 'Customer deleted successfully' } as unknown as T;
+          return saveAndReturn({ success: true, message: 'Customer deleted successfully' } as unknown as T);
         }
       }
     }
@@ -1177,7 +1227,7 @@ export async function handleDirectSupabaseFetch<T>(
             body: JSON.stringify([newAuditor]),
           });
 
-          return formatted as unknown as T;
+          return saveAndReturn(formatted as unknown as T);
         }
       }
 
@@ -1202,7 +1252,7 @@ export async function handleDirectSupabaseFetch<T>(
             body: JSON.stringify(cleanAuditor),
           });
 
-          return { ...body, id: audId } as unknown as T;
+          return saveAndReturn({ ...body, id: audId } as unknown as T);
         }
       }
 
@@ -1216,7 +1266,7 @@ export async function handleDirectSupabaseFetch<T>(
           await querySupabaseRest(`auditors?id=eq.${audId}`, {
             method: 'DELETE',
           });
-          return { success: true, message: 'Auditor deleted successfully' } as unknown as T;
+          return saveAndReturn({ success: true, message: 'Auditor deleted successfully' } as unknown as T);
         }
       }
     }
@@ -1281,7 +1331,7 @@ export async function handleDirectSupabaseFetch<T>(
           body: JSON.stringify([newDeliveryBoy]),
         });
 
-        return formatted as unknown as T;
+        return saveAndReturn(formatted as unknown as T);
       }
 
       if (method === 'PUT' && body) {
@@ -1305,7 +1355,7 @@ export async function handleDirectSupabaseFetch<T>(
             body: JSON.stringify(cleanDBoy),
           });
 
-          return { ...body, id: dBoyId } as unknown as T;
+          return saveAndReturn({ ...body, id: dBoyId } as unknown as T);
         }
       }
 
@@ -1319,7 +1369,7 @@ export async function handleDirectSupabaseFetch<T>(
           await querySupabaseRest(`delivery_boys?id=eq.${dBoyId}`, {
             method: 'DELETE',
           });
-          return { success: true, message: 'Delivery Partner deleted successfully' } as unknown as T;
+          return saveAndReturn({ success: true, message: 'Delivery Partner deleted successfully' } as unknown as T);
         }
       }
     }
@@ -1411,9 +1461,11 @@ export async function handleDirectSupabaseFetch<T>(
         }
 
         triggerBackgroundTask(async () => {
+          // Omit order_number to avoid PostgREST PGRST204 errors if column is missing from Supabase
+          const { order_number, ...cleanOrderForSupabase } = newOrder as any;
           await querySupabaseRest('orders', {
             method: 'POST',
-            body: JSON.stringify([newOrder]),
+            body: JSON.stringify([cleanOrderForSupabase]),
           });
         });
 

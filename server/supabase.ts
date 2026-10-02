@@ -628,6 +628,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
     address TEXT NOT NULL,
     city TEXT DEFAULT 'Ranchi',
     pincode TEXT,
+    area TEXT,
     role TEXT DEFAULT 'CUSTOMER',
     status TEXT DEFAULT 'ACTIVE',
     has_pantry_card BOOLEAN DEFAULT FALSE,
@@ -655,6 +656,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- 6. Orders (Pantry & Quick COD)
 CREATE TABLE IF NOT EXISTS public.orders (
     id TEXT PRIMARY KEY,
+    order_number TEXT,
     order_type TEXT NOT NULL, -- 'PANTRY' or 'QUICK'
     customer_id TEXT REFERENCES public.customers(id),
     customer_name TEXT NOT NULL,
