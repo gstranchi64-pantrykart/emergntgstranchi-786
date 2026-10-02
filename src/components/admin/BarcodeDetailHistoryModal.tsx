@@ -407,37 +407,64 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
 
               {/* Merged KPI Strip */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 mt-5 pt-4 border-t border-white/10">
-                <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <div className="text-[10px] text-slate-300 font-medium uppercase tracking-wider flex items-center gap-1">
-                    <Boxes className="w-3 h-3 text-emerald-400" />
-                    <span>Merged Stock</span>
+                <div 
+                  onClick={() => setActiveTab('batches')}
+                  className="bg-white/5 hover:bg-emerald-950/40 p-2.5 rounded-xl border border-white/10 hover:border-emerald-500/40 cursor-pointer transition shadow-2xs hover:shadow-xs group"
+                  title="Click to view Batch Level Stock Breakdown & see how the merged stock was formed"
+                >
+                  <div className="text-[10px] text-emerald-200 font-medium uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Boxes className="w-3 h-3 text-emerald-400" />
+                      <span>Merged Stock</span>
+                    </span>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md font-bold">
+                      {summary.activeBatchesCount} Active
+                    </span>
                   </div>
                   <div className="text-xl font-black text-emerald-400 mt-1">
                     {summary.totalAvailableStock} <span className="text-xs font-normal text-slate-300">units</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Across {summary.totalBatchesCount} batches</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-emerald-300 transition">Across {summary.totalBatchesCount} batches 🔍</div>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <div className="text-[10px] text-slate-300 font-medium uppercase tracking-wider flex items-center gap-1">
-                    <ArrowDownLeft className="w-3 h-3 text-indigo-400" />
-                    <span>Total Purchased</span>
+                <div 
+                  onClick={() => setActiveTab('purchases')}
+                  className="bg-white/5 hover:bg-indigo-950/40 p-2.5 rounded-xl border border-white/10 hover:border-indigo-500/40 cursor-pointer transition shadow-2xs hover:shadow-xs group"
+                  title="Click to view complete Purchase Inward History for this barcode"
+                >
+                  <div className="text-[10px] text-indigo-200 font-medium uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <ArrowDownLeft className="w-3 h-3 text-indigo-400" />
+                      <span>Total Purchased</span>
+                    </span>
+                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-md font-bold">
+                      Inward
+                    </span>
                   </div>
                   <div className="text-xl font-black text-white mt-1">
                     {summary.totalInitialPurchased} <span className="text-xs font-normal text-slate-300">units</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">₹{(summary.totalPurchaseCost).toLocaleString('en-IN')} CP</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-indigo-300 transition">₹{(summary.totalPurchaseCost).toLocaleString('en-IN')} CP 🔍</div>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <div className="text-[10px] text-slate-300 font-medium uppercase tracking-wider flex items-center gap-1">
-                    <ShoppingBag className="w-3 h-3 text-rose-400" />
-                    <span>Quick Sold</span>
+                <div 
+                  onClick={() => setActiveTab('sales')}
+                  className="bg-white/5 hover:bg-rose-950/40 p-2.5 rounded-xl border border-white/10 hover:border-rose-500/40 cursor-pointer transition shadow-2xs hover:shadow-xs group"
+                  title="Click to view Quick Sold & COD Order details for this barcode"
+                >
+                  <div className="text-[10px] text-rose-200 font-medium uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <ShoppingBag className="w-3 h-3 text-rose-400" />
+                      <span>Quick Sold</span>
+                    </span>
+                    <span className="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded-md font-bold">
+                      COD
+                    </span>
                   </div>
                   <div className="text-xl font-black text-rose-300 mt-1">
                     {summary.totalQuickSold} <span className="text-xs font-normal text-slate-300">units</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{quickOrders.length} customer orders</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-rose-300 transition">{quickOrders.length} orders 🔍</div>
                 </div>
 
                 <div
@@ -464,26 +491,54 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                   </div>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <div className="text-[10px] text-slate-300 font-medium uppercase tracking-wider flex items-center gap-1">
-                    <RotateCcw className="w-3 h-3 text-sky-400" />
-                    <span>Returned</span>
+                <div 
+                  onClick={() => {
+                    setActiveTab('ledger');
+                    setLedgerFilter('RETURN');
+                  }}
+                  className="bg-white/5 hover:bg-sky-950/40 p-2.5 rounded-xl border border-white/10 hover:border-sky-500/40 cursor-pointer transition shadow-2xs hover:shadow-xs group"
+                  title="Click to view Return Logs and transactions for this barcode"
+                >
+                  <div className="text-[10px] text-sky-200 font-medium uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <RotateCcw className="w-3 h-3 text-sky-400" />
+                      <span>Returned</span>
+                    </span>
+                    <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded-md font-bold">
+                      Returns
+                    </span>
                   </div>
                   <div className="text-xl font-black text-sky-300 mt-1">
                     {summary.totalReturnedStock} <span className="text-xs font-normal text-slate-300">units</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Restored to inventory</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-sky-300 transition">Restored to inventory 🔍</div>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <div className="text-[10px] text-slate-300 font-medium uppercase tracking-wider flex items-center gap-1">
-                    <IndianRupee className="w-3 h-3 text-amber-400" />
-                    <span>Realized Profit</span>
+                <div 
+                  onClick={() => {
+                    alert(`Realized Profit Calculation for Barcode #${barcode}:\n\n` +
+                          `• Total Sales Revenue (Sales Amount): ₹${(summary.realizedRevenue || 0).toLocaleString('en-IN')}\n` +
+                          `• Total Purchase Rate (Cost Price): ₹${(summary.totalPurchaseCost || 0).toLocaleString('en-IN')}\n\n` +
+                          `Formula: Sales Revenue - Purchase Cost = Realized Profit\n` +
+                          `Result: ₹${(summary.realizedRevenue || 0).toLocaleString('en-IN')} - ₹${(summary.totalPurchaseCost || 0).toLocaleString('en-IN')} = ₹${(summary.profitEarned || 0).toLocaleString('en-IN')}\n\n` +
+                          `Note: This is computed dynamically using real-time transactions for this barcode.`);
+                  }}
+                  className="bg-white/5 hover:bg-amber-950/40 p-2.5 rounded-xl border border-white/10 hover:border-amber-500/40 cursor-pointer transition shadow-2xs hover:shadow-xs group"
+                  title="Click to see the dynamic profit math: Sales Amount - Purchase Rate"
+                >
+                  <div className="text-[10px] text-amber-200 font-medium uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <IndianRupee className="w-3 h-3 text-amber-400" />
+                      <span>Realized Profit</span>
+                    </span>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-md font-bold">
+                      Math 🧮
+                    </span>
                   </div>
                   <div className="text-xl font-black text-amber-300 mt-1">
                     ₹{Math.max(0, summary.profitEarned).toLocaleString('en-IN')}
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{summary.marginPercent}% avg margin</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-amber-300 transition">{summary.marginPercent}% avg margin 🔍</div>
                 </div>
               </div>
             </div>

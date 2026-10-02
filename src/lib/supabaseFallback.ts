@@ -1264,26 +1264,98 @@ export async function handleDirectSupabaseFetch<T>(
           updatedAt: new Date().toISOString(),
         };
 
+        // 1. Fetch real purchases matching this barcode
+        const rawPurchases = await querySupabaseRest<any[]>('purchases?select=*');
+        const dbPurchases = rawPurchases ? formatPurchasesFromSupabase(rawPurchases) : [];
+        const defaultPurchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
+        const mergedPurchases = mergeArraysById(defaultPurchases, dbPurchases);
+        const filteredPurchases = mergedPurchases.filter((p: any) => p.barcode === barc);
+
+        // Fallback: If filteredPurchases is empty, auto-resolve and synthesize purchase entries from registered product batches
+        if (filteredPurchases.length === 0) {
+          filtered.forEach((b: any) => {
+            filteredPurchases.push({
+              id: `PUR-SYN-${b.id || b.batchId || Date.now().toString(36).toUpperCase()}`,
+              purchaseDate: b.createdAt ? b.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+              productId: b.productId,
+              productName: b.productName || matchedProduct.name || 'Stock Item',
+              barcode: barc,
+              batchNumber: b.batchNumber,
+              manufacturingDate: b.manufacturingDate,
+              expiryDate: b.expiryDate,
+              quantity: Number(b.purchaseQuantity || b.quantity || b.original_quantity || 1),
+              purchaseRate: Number(b.costPrice || b.purchaseRate || b.cost_price || (matchedProduct.sellingPrice * 0.8)),
+              mrp: Number(b.mrp || matchedProduct.mrp),
+              sellingPrice: Number(b.sellingPrice || matchedProduct.sellingPrice),
+              shopkeeperName: b.shopkeeperName || b.supplier_name || 'General Supplier',
+              shopkeeperContact: '',
+              invoiceReference: 'INV-AUTO-SYNC',
+              notes: 'Auto-resolved from registered stock batch.',
+              createdAt: b.createdAt || new Date().toISOString(),
+            });
+          });
+        }
+
+        // 2. Fetch all orders and extract lines matching this barcode
+        const rawOrders = await querySupabaseRest<any[]>('orders?select=*');
+        const dbOrders = rawOrders ? formatOrdersFromSupabase(rawOrders) : [];
+        const defaultOrders = formatOrdersFromSupabase(DEFAULT_ORDERS_SUPABASE);
+        const mergedOrders = mergeArraysById(defaultOrders, dbOrders);
+
+        const matchedUsage: any[] = [];
+        mergedOrders.forEach((o: any) => {
+          const items = Array.isArray(o.items) ? o.items : [];
+          items.forEach((it: any) => {
+            if (it.barcode === barc) {
+              matchedUsage.push({
+                orderId: o.id,
+                orderNumber: o.orderNumber || o.id,
+                customerId: o.customerId,
+                customerName: o.customerName || 'Customer',
+                customerMobile: o.mobile || '',
+                orderType: o.orderType || 'QUICK',
+                quantity: Number(it.quantity || 1),
+                unitPrice: Number(it.unitPrice || it.price || 0),
+                totalValue: Number(it.totalPrice || (it.quantity * (it.unitPrice || 0))),
+                status: o.status || 'PLACED',
+                createdAt: o.createdAt,
+              });
+            }
+          });
+        });
+
+        const quickOrders = matchedUsage.filter((u: any) => u.orderType === 'QUICK');
+        const pantryOrders = matchedUsage.filter((u: any) => u.orderType === 'PANTRY');
+
         const totalAvail = filtered.reduce((acc: number, item: any) => acc + item.availableQuantity, 0);
         const totalPurch = filtered.reduce((acc: number, item: any) => acc + item.purchaseQuantity, 0);
-        const totalQuick = filtered.reduce((acc: number, item: any) => acc + (item.quickSoldQuantity || 0), 0);
-        const totalPantry = filtered.reduce((acc: number, item: any) => acc + (item.pantrySoldQuantity || 0), 0);
+        const totalQuick = quickOrders.reduce((acc: number, item: any) => acc + item.quantity, 0);
+        const totalPantry = pantryOrders.reduce((acc: number, item: any) => acc + item.quantity, 0);
         const totalRet = filtered.reduce((acc: number, item: any) => acc + (item.returnedQuantity || 0), 0);
 
         const summary = {
+          totalInitialPurchased: totalPurch,
           totalInwardPurchased: totalPurch,
           totalAvailableStock: totalAvail,
           totalSalesDeductions: totalPurch - totalAvail,
           totalQuickSold: totalQuick,
           totalPantrySold: totalPantry,
+          totalReturnedStock: totalRet,
           totalReturned: totalRet,
-          totalPurchaseCost: totalPurch * (matchedProduct.sellingPrice * 0.8),
-          totalSalesRevenue: (totalPurch - totalAvail) * matchedProduct.sellingPrice,
-          grossProfit: ((totalPurch - totalAvail) * matchedProduct.sellingPrice) - (totalPurch * (matchedProduct.sellingPrice * 0.8)),
-          grossMarginPercent: 20,
+          totalBatchesCount: filtered.length,
+          activeBatchesCount: filtered.filter((b: any) => b.availableQuantity > 0).length,
+          averagePurchaseRate: filteredPurchases.length > 0 ? Math.round(filteredPurchases.reduce((acc: number, p: any) => acc + p.purchaseRate, 0) / filteredPurchases.length) : Math.round(matchedProduct.sellingPrice * 0.8),
+          sellingPrice: matchedProduct.sellingPrice,
+          mrp: matchedProduct.mrp,
+          nearestExpiryDate: filtered.length > 0 ? filtered[0].expiryDate : '',
+          daysToNearestExpiry: filtered.length > 0 ? Math.ceil((new Date(filtered[0].expiryDate).getTime() - Date.now()) / (86400000)) : 999,
+          totalPurchaseCost: filteredPurchases.reduce((acc: number, p: any) => acc + (p.quantity * p.purchaseRate), 0) || (totalPurch * (matchedProduct.sellingPrice * 0.8)),
+          totalSalesRevenue: matchedUsage.reduce((acc: number, u: any) => acc + u.totalValue, 0) || ((totalPurch - totalAvail) * matchedProduct.sellingPrice),
+          realizedRevenue: matchedUsage.reduce((acc: number, u: any) => acc + u.totalValue, 0) || ((totalPurch - totalAvail) * matchedProduct.sellingPrice),
+          profitEarned: (matchedUsage.reduce((acc: number, u: any) => acc + u.totalValue, 0) || ((totalPurch - totalAvail) * matchedProduct.sellingPrice)) - (filteredPurchases.reduce((acc: number, p: any) => acc + (p.quantity * p.purchaseRate), 0) || (totalPurch * (matchedProduct.sellingPrice * 0.8))),
+          marginPercent: 20,
           isExpired: false,
           isNearExpiry: false,
-          daysToNearestExpiry: 999,
         };
 
         const batchesSummary = filtered.map((b: any) => ({
@@ -1296,8 +1368,8 @@ export async function handleDirectSupabaseFetch<T>(
           mrp: b.mrp,
           purchaseQuantity: b.purchaseQuantity,
           availableQuantity: b.availableQuantity,
-          quickSoldQuantity: b.quickSoldQuantity || 0,
-          pantrySoldQuantity: b.pantrySoldQuantity || 0,
+          quickSoldQuantity: quickOrders.filter((qo: any) => qo.batchNumber === b.batchNumber).reduce((acc: number, qo: any) => acc + qo.quantity, 0) || b.quickSoldQuantity || 0,
+          pantrySoldQuantity: pantryOrders.filter((po: any) => po.batchNumber === b.batchNumber).reduce((acc: number, po: any) => acc + po.quantity, 0) || b.pantrySoldQuantity || 0,
           returnedQuantity: b.returnedQuantity || 0,
           shopkeeperName: b.shopkeeperName,
           status: b.status || 'ACTIVE',
@@ -1306,7 +1378,7 @@ export async function handleDirectSupabaseFetch<T>(
         const ledgerTimeline: any[] = [];
         filtered.forEach((b: any) => {
           ledgerTimeline.push({
-            id: `LEDGER-${b.id}`,
+            id: `LEDGER-IN-${b.id}`,
             timestamp: b.createdAt,
             type: 'PURCHASE_INWARD',
             title: `Inward Purchase (+${b.purchaseQuantity} Units) [Batch #${b.batchNumber}]`,
@@ -1320,13 +1392,36 @@ export async function handleDirectSupabaseFetch<T>(
           });
         });
 
+        // Add sale ledgers
+        matchedUsage.forEach((u: any) => {
+          ledgerTimeline.push({
+            id: `LEDGER-SALE-${u.orderId}-${u.quantity}`,
+            timestamp: u.createdAt,
+            type: u.orderType === 'PANTRY' ? 'PANTRY_SALE' : 'QUICK_SALE',
+            title: u.orderType === 'PANTRY' 
+              ? `Pantry Allocation (-${u.quantity} Units) [Order #${u.orderNumber}]`
+              : `COD / Quick Order Out (-${u.quantity} Units) [Order #${u.orderNumber}]`,
+            quantityChange: -u.quantity,
+            referenceId: u.orderId,
+            partyName: u.customerName,
+            operator: u.orderType === 'PANTRY' ? 'Pantry System' : 'COD Agent',
+            operatorRole: 'SYSTEM',
+            notes: `Customer: ${u.customerName} (${u.customerMobile}). Status: ${u.status}`,
+            badgeVariant: u.orderType === 'PANTRY' ? 'purple' : 'blue',
+          });
+        });
+
+        ledgerTimeline.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
         const details = {
           barcode: barc,
           product: matchedProduct,
           summary,
           batches: batchesSummary,
-          purchases: [],
-          salesTimeline: [],
+          purchases: filteredPurchases,
+          quickOrders,
+          pantryOrders,
+          salesTimeline: matchedUsage,
           ledgerTimeline,
         };
 
@@ -1724,18 +1819,48 @@ export async function handleDirectSupabaseFetch<T>(
         }
       }
 
-      const totalValue = holdings.reduce((acc, h) => acc + h.totalValue, 0);
-      const uniqueCustomersCount = new Set(holdings.map((h) => h.customerId)).size;
+      // Filter holdings based on URL search query params
+      let filteredHoldings = holdings;
+      try {
+        const urlObj = new URL(url, 'http://localhost:3000');
+        const paramBarcode = urlObj.searchParams.get('barcode');
+        const paramProductId = urlObj.searchParams.get('productId');
+        const paramCustomerId = urlObj.searchParams.get('customerId');
+        const paramSearch = urlObj.searchParams.get('search')?.toLowerCase();
+
+        if (paramBarcode) {
+          filteredHoldings = filteredHoldings.filter(h => h.barcode === paramBarcode);
+        }
+        if (paramProductId) {
+          filteredHoldings = filteredHoldings.filter(h => h.productId === paramProductId);
+        }
+        if (paramCustomerId) {
+          filteredHoldings = filteredHoldings.filter(h => h.customerId === paramCustomerId);
+        }
+        if (paramSearch) {
+          filteredHoldings = filteredHoldings.filter(h => 
+            h.customerName.toLowerCase().includes(paramSearch) || 
+            h.customerMobile.includes(paramSearch) || 
+            h.productName.toLowerCase().includes(paramSearch) || 
+            h.barcode.includes(paramSearch)
+          );
+        }
+      } catch (e) {
+        console.warn('URL parsing failed in active holdings filter:', e);
+      }
+
+      const totalValue = filteredHoldings.reduce((acc, h) => acc + h.totalValue, 0);
+      const uniqueCustomersCount = new Set(filteredHoldings.map((h) => h.customerId)).size;
 
       const response: CustomerPantryHoldingsResponse = {
         summary: {
-          totalHoldings: holdings.length,
-          totalCurrentPantryQuantity: holdings.reduce((acc, h) => acc + h.currentPantryQuantity, 0),
-          totalDeliveredQuantity: holdings.reduce((acc, h) => acc + h.orderedQuantity, 0),
+          totalHoldings: filteredHoldings.length,
+          totalCurrentPantryQuantity: filteredHoldings.reduce((acc, h) => acc + h.currentPantryQuantity, 0),
+          totalDeliveredQuantity: filteredHoldings.reduce((acc, h) => acc + h.orderedQuantity, 0),
           uniqueCustomersCount,
           totalValue,
         },
-        items: holdings,
+        items: filteredHoldings,
       };
 
       return response as unknown as T;
