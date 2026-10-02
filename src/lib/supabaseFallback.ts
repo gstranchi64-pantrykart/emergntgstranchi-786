@@ -1400,27 +1400,27 @@ export async function handleDirectSupabaseFetch<T>(
           await querySupabaseRest(`product_batches?id=eq.${old.id}`, {
             method: 'PATCH',
             body: JSON.stringify({
-              initial_quantity: finalBatch.purchaseQuantity,
-              available_quantity: finalBatch.availableQuantity,
+              quantity: finalBatch.availableQuantity,
+              original_quantity: finalBatch.purchaseQuantity,
+              updated_at: new Date().toISOString(),
             }),
           });
         } else {
           const newBatchDb = {
             id: batchId,
             product_id: newPurchase.product_id,
-            product_name: newPurchase.product_name,
-            barcode: newPurchase.barcode,
             batch_number: newPurchase.batch_number,
-            manufacturing_date: newPurchase.manufacturing_date,
+            barcode: newPurchase.barcode,
+            manufacture_date: newPurchase.manufacturing_date,
             expiry_date: newPurchase.expiry_date,
             cost_price: newPurchase.purchase_rate,
             selling_price: newPurchase.selling_price,
-            initial_quantity: newPurchase.quantity,
-            available_quantity: newPurchase.quantity,
-            sold_quantity: 0,
+            quantity: newPurchase.quantity,
+            original_quantity: newPurchase.quantity,
             status: 'ACTIVE',
-            storage_bin: 'A-01',
-            shopkeeper_name: newPurchase.shopkeeper_name,
+            supplier_name: newPurchase.shopkeeper_name,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
           finalBatch = formatBatchesFromSupabase([newBatchDb])[0];
           
@@ -1468,13 +1468,12 @@ export async function handleDirectSupabaseFetch<T>(
           
           const updated = ramStore.batches[idx];
           
-          triggerBackgroundTask(async () => {
-            await querySupabaseRest(`product_batches?id=eq.${batchId}`, {
-              method: 'PATCH',
-              body: JSON.stringify({
-                available_quantity: Number(newAvailableQty),
-              }),
-            });
+          await querySupabaseRest(`product_batches?id=eq.${batchId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              quantity: Number(newAvailableQty),
+              updated_at: new Date().toISOString(),
+            }),
           });
           
           return saveAndReturn(updated as unknown as T);
@@ -1526,27 +1525,25 @@ export async function handleDirectSupabaseFetch<T>(
           ramStore.products.unshift(formattedProduct);
         }
 
-        triggerBackgroundTask(async () => {
-          await querySupabaseRest('products', {
-            method: 'POST',
-            body: JSON.stringify([{
-              id: formattedProduct.id,
-              name: formattedProduct.name,
-              brand: formattedProduct.brand,
-              category: formattedProduct.category,
-              sub_category: formattedProduct.subCategory,
-              barcode: formattedProduct.barcode,
-              images: formattedProduct.images,
-              unit: formattedProduct.unit,
-              weight_size: formattedProduct.weightSize,
-              mrp: formattedProduct.mrp,
-              selling_price: formattedProduct.sellingPrice,
-              is_pantry_eligible: formattedProduct.orderEligibility !== 'QUICK_ONLY',
-              is_quick_order_eligible: formattedProduct.orderEligibility !== 'PANTRY_ONLY',
-              status: formattedProduct.status,
-              updated_at: formattedProduct.updatedAt,
-            }]),
-          });
+        await querySupabaseRest('products', {
+          method: 'POST',
+          body: JSON.stringify([{
+            id: formattedProduct.id,
+            name: formattedProduct.name,
+            brand: formattedProduct.brand,
+            category: formattedProduct.category,
+            sub_category: formattedProduct.subCategory,
+            barcode: formattedProduct.barcode,
+            images: formattedProduct.images,
+            unit: formattedProduct.unit,
+            weight_size: formattedProduct.weightSize,
+            mrp: formattedProduct.mrp,
+            selling_price: formattedProduct.sellingPrice,
+            is_pantry_eligible: formattedProduct.orderEligibility !== 'QUICK_ONLY',
+            is_quick_order_eligible: formattedProduct.orderEligibility !== 'PANTRY_ONLY',
+            status: formattedProduct.status,
+            updated_at: formattedProduct.updatedAt,
+          }]),
         });
 
         return formattedProduct as unknown as T;
@@ -2244,20 +2241,20 @@ function formatBatchesFromSupabase(data: any[]): any[] {
   return data.map((b: any) => ({
     id: b.id,
     productId: b.product_id || b.productId,
-    productName: b.product_name || b.productName,
+    productName: b.product_name || b.productName || '',
     barcode: b.barcode,
     batchNumber: b.batch_number || b.batchNumber,
-    manufacturingDate: b.manufacturing_date || b.manufacturingDate,
+    manufacturingDate: b.manufacture_date || b.manufacturing_date || b.manufacturingDate || b.mfg_date,
     expiryDate: b.expiry_date || b.expiryDate,
-    purchaseQuantity: Number(b.initial_quantity || b.purchaseQuantity || 0),
-    availableQuantity: Number(b.available_quantity || b.availableQuantity || 0),
+    purchaseQuantity: Number(b.original_quantity || b.initial_quantity || b.purchaseQuantity || b.purchase_quantity || 0),
+    availableQuantity: Number(b.quantity || b.available_quantity || b.availableQuantity || 0),
     reservedQuantity: Number(b.reserved_quantity || b.reservedQuantity || 0),
     quickSoldQuantity: Number(b.quick_sold_quantity || b.quickSoldQuantity || 0),
     pantrySoldQuantity: Number(b.pantry_sold_quantity || b.pantrySoldQuantity || 0),
     returnedQuantity: Number(b.returned_quantity || b.returnedQuantity || 0),
-    shopkeeperName: b.shopkeeper_name || b.shopkeeperName || 'General Supplier',
+    shopkeeperName: b.supplier_name || b.shopkeeper_name || b.shopkeeperName || 'General Supplier',
     shopkeeperContact: b.shopkeeper_contact || b.shopkeeperContact || '',
-    purchaseRate: Number(b.cost_price || b.purchaseRate || 0),
+    purchaseRate: Number(b.cost_price || b.purchase_price || b.purchaseRate || 0),
     mrp: Number(b.mrp || 0),
     sellingPrice: Number(b.selling_price || b.sellingPrice || 0),
     createdAt: b.created_at || b.createdAt || new Date().toISOString(),
