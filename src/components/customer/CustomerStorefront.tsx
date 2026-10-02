@@ -144,15 +144,15 @@ export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
         api.getProducts(true), // published only
         api.getBatches(),
       ]);
-      if (JSON.stringify(products) !== JSON.stringify(prodList)) setProducts(prodList);
-      if (JSON.stringify(batches) !== JSON.stringify(batchList)) setBatches(batchList);
+      setProducts(prodList);
+      setBatches(batchList);
       if (customer) {
         const [timelines, pItems] = await Promise.all([
           api.getCustomerProductTimeline(customer.id).catch(() => []),
           api.getPantryCard(customer.id).catch(() => []),
         ]);
-        if (JSON.stringify(customerTimelines) !== JSON.stringify(timelines || [])) setCustomerTimelines(timelines || []);
-        if (JSON.stringify(customerPantryItems) !== JSON.stringify(pItems || [])) setCustomerPantryItems(pItems || []);
+        setCustomerTimelines(timelines || []);
+        setCustomerPantryItems(pItems || []);
       }
     } catch (err) {
       console.error(err);

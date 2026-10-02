@@ -447,32 +447,32 @@ const DEFAULT_ORDERS_SUPABASE = [
 const DEFAULT_BATCHES_SUPABASE = [
   {
     id: 'BATCH-000001',
-    product_id: 'PRD-001',
-    product_name: 'Horlicks Health & Nutrition Drink Classic Malt 500g',
-    barcode: '123456789',
-    batch_number: 'B-MALT-124001',
+    product_id: 'PRD-000001',
+    product_name: 'India Gate Basmati Rice Classic 5kg',
+    barcode: '8901234567891',
+    batch_number: 'B-RICE-124001',
     manufacturing_date: '2026-08-01',
     expiry_date: '2027-08-01',
-    cost_price: 240,
-    selling_price: 285,
+    cost_price: 450,
+    selling_price: 520,
     initial_quantity: 50,
     available_quantity: 45,
     sold_quantity: 5,
     status: 'ACTIVE',
     storage_bin: 'A-12',
-    shopkeeper_name: 'Ranchi Wholesale FMCG Mart',
+    shopkeeper_name: 'Ranchi Wholesale Kirana',
     created_at: new Date().toISOString()
   },
   {
     id: 'BATCH-000002',
-    product_id: 'PRD-002',
-    product_name: 'Aashirvaad Superior MP Shudh Chakki Atta 5kg',
-    barcode: '8901030382910',
+    product_id: 'PRD-000002',
+    product_name: 'Aashirvaad Shuddh Chakki Atta 10kg',
+    barcode: '8901234567892',
     batch_number: 'B-ATTA-5KG',
     manufacturing_date: '2026-09-01',
     expiry_date: '2027-03-01',
-    cost_price: 225,
-    selling_price: 265,
+    cost_price: 350,
+    selling_price: 410,
     initial_quantity: 100,
     available_quantity: 92,
     sold_quantity: 8,
@@ -487,20 +487,20 @@ const DEFAULT_PURCHASES_SUPABASE = [
   {
     id: 'PUR-10001',
     purchase_date: '2026-09-10',
-    product_id: 'PRD-001',
-    product_name: 'Horlicks Health & Nutrition Drink Classic Malt 500g',
-    barcode: '123456789',
-    batch_number: 'B-MALT-124001',
+    product_id: 'PRD-000001',
+    product_name: 'India Gate Basmati Rice Classic 5kg',
+    barcode: '8901234567891',
+    batch_number: 'B-RICE-124001',
     manufacturing_date: '2026-08-01',
     expiry_date: '2027-08-01',
     quantity: 50,
-    purchase_rate: 240,
-    mrp: 320,
-    selling_price: 285,
-    shopkeeper_name: 'Ranchi Wholesale FMCG Mart',
+    purchase_rate: 450,
+    mrp: 650,
+    selling_price: 520,
+    shopkeeper_name: 'Ranchi Wholesale Kirana',
     shopkeeper_contact: '9835123400',
     invoice_reference: 'INV-2026-9081',
-    notes: 'Premium malt health drink received.',
+    notes: 'Premium classic basmati lot received.',
     created_at: new Date().toISOString()
   }
 ];
@@ -1055,7 +1055,6 @@ export async function handleDirectSupabaseFetch<T>(
               body: JSON.stringify({
                 initial_quantity: finalBatch.purchaseQuantity,
                 available_quantity: finalBatch.availableQuantity,
-                updated_at: finalBatch.updatedAt,
               }),
             });
           });
@@ -1063,8 +1062,6 @@ export async function handleDirectSupabaseFetch<T>(
           const newBatchDb = {
             id: batchId,
             product_id: newPurchase.product_id,
-            product_name: newPurchase.product_name,
-            barcode: newPurchase.barcode,
             batch_number: newPurchase.batch_number,
             manufacturing_date: newPurchase.manufacturing_date,
             expiry_date: newPurchase.expiry_date,
@@ -1075,9 +1072,14 @@ export async function handleDirectSupabaseFetch<T>(
             sold_quantity: 0,
             status: 'ACTIVE',
             storage_bin: 'A-01',
-            shopkeeper_name: newPurchase.shopkeeper_name,
           };
           finalBatch = formatBatchesFromSupabase([newBatchDb])[0];
+          
+          // Attach UI-only transient fields for local cache mapping
+          finalBatch.productName = newPurchase.product_name;
+          finalBatch.barcode = newPurchase.barcode;
+          finalBatch.shopkeeperName = newPurchase.shopkeeper_name;
+          
           ramStore.batches.unshift(finalBatch);
 
           // Sync POST to Supabase table
@@ -1089,12 +1091,14 @@ export async function handleDirectSupabaseFetch<T>(
           });
         }
 
-        // Sync POST purchase to Supabase table
+        // Sync POST purchase to Supabase table (catch silently if purchases table does not exist)
         triggerBackgroundTask(async () => {
-          await querySupabaseRest('purchases', {
-            method: 'POST',
-            body: JSON.stringify([newPurchase]),
-          });
+          try {
+            await querySupabaseRest('purchases', {
+              method: 'POST',
+              body: JSON.stringify([newPurchase]),
+            });
+          } catch {}
         });
 
         return saveAndReturn({
@@ -1124,7 +1128,6 @@ export async function handleDirectSupabaseFetch<T>(
               method: 'PATCH',
               body: JSON.stringify({
                 available_quantity: Number(newAvailableQty),
-                updated_at: updated.updatedAt,
               }),
             });
           });
