@@ -168,10 +168,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               color: currentTheme.textOnPrimary,
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold shadow-xs transition cursor-pointer hover:opacity-95"
-            title="10 Ready-Made ERP Themes (Yellow, Blue, Green, Parrot)"
+            title="Reports, Compliance, Wallets, Field Audits & Themes Settings"
           >
             <Palette className="w-4 h-4" />
-            <span>Theme: {currentTheme.name.split('(')[0]}</span>
+            <span>Reports &amp; Compliance 📊</span>
           </button>
           <button
             onClick={() => fetchSummary()}

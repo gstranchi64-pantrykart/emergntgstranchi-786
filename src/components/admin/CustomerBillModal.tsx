@@ -179,13 +179,13 @@ export const CustomerBillModal: React.FC<CustomerBillModalProps> = ({ order, onC
                         {item.weightSize || '-'}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                        ₹{item.price.toFixed(2)}
+                        ₹{(item.price ?? 0).toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-center font-bold text-slate-900">
-                        {item.quantity}
+                        {item.quantity ?? 0}
                       </td>
                       <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
-                        ₹{(item.price * item.quantity).toFixed(2)}
+                        ₹{((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -199,12 +199,12 @@ export const CustomerBillModal: React.FC<CustomerBillModalProps> = ({ order, onC
             <div className="w-64 space-y-1.5 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Subtotal:</span>
-                <span className="font-mono font-medium">₹{order.subtotal.toFixed(2)}</span>
+                <span className="font-mono font-medium">₹{(order.subtotal ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Delivery Charge:</span>
                 <span className="font-mono font-medium">
-                  {order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee.toFixed(2)}`}
+                  {order.deliveryFee === 0 ? 'FREE' : `₹${(order.deliveryFee ?? 0).toFixed(2)}`}
                 </span>
               </div>
               <div className="flex justify-between text-slate-600">
@@ -213,7 +213,7 @@ export const CustomerBillModal: React.FC<CustomerBillModalProps> = ({ order, onC
               </div>
               <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-300">
                 <span>Total Amount:</span>
-                <span className="font-mono text-emerald-800">₹{order.totalAmount.toFixed(2)}</span>
+                <span className="font-mono text-emerald-800">₹{(order.totalAmount ?? 0).toFixed(2)}</span>
               </div>
               {order.orderType === 'PANTRY' ? (
                 <div className="text-[11px] text-purple-700 font-semibold bg-purple-50 p-2 rounded-lg text-right mt-1 border border-purple-200">
@@ -221,7 +221,7 @@ export const CustomerBillModal: React.FC<CustomerBillModalProps> = ({ order, onC
                 </div>
               ) : (
                 <div className="text-[11px] text-amber-800 font-semibold bg-amber-50 p-2 rounded-lg text-right mt-1 border border-amber-200">
-                  Cash on Delivery (COD Amount: ₹{order.totalAmount.toFixed(2)})
+                  Cash on Delivery (COD Amount: ₹{(order.totalAmount ?? 0).toFixed(2)})
                 </div>
               )}
             </div>

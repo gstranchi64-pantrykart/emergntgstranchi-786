@@ -97,19 +97,22 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
       const raw = localStorage.getItem('pm_cached_orders');
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
   const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>(() => {
     try {
       const raw = localStorage.getItem('pm_cached_delivery');
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
   const [auditors, setAuditors] = useState<Auditor[]>(() => {
     try {
       const raw = localStorage.getItem('pm_cached_auditors');
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
@@ -118,7 +121,8 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
   const [loading, setLoading] = useState(() => {
     try {
       const raw = localStorage.getItem('pm_cached_orders');
-      return !raw || JSON.parse(raw).length === 0;
+      const parsed = raw ? JSON.parse(raw) : null;
+      return !Array.isArray(parsed) || parsed.length === 0;
     } catch { return false; }
   });
 
@@ -320,12 +324,12 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
         api.getCustomers(),
         api.getAuditorChecks(),
       ]);
-      setOrders(ordList);
-      setDeliveryBoys(dbList);
-      setAuditors(audList);
-      setReturns(retList);
-      setReplacements(repList);
-      setBatches(bList);
+      setOrders(ordList || []);
+      setDeliveryBoys(dbList || []);
+      setAuditors(audList || []);
+      setReturns(retList || []);
+      setReplacements(repList || []);
+      setBatches(bList || []);
       setProducts(prodList || []);
       setAuditLogs(logList || []);
       setCustomers(custList || []);
@@ -356,8 +360,8 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
   const refreshSelectedOrder = async (orderId: string) => {
     try {
       const ords = await api.getOrders();
-      setOrders(ords);
-      const found = ords.find((o) => o.id === orderId);
+      setOrders(ords || []);
+      const found = (ords || []).find((o) => o.id === orderId);
       if (found) {
         setSelectedOrder(found);
       }
