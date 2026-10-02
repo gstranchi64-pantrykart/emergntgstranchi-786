@@ -836,6 +836,97 @@ export function preheatSupabaseConnection() {
       ramStore.purchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
     }
 
+    // Auto-sync locally-stuck products back to Supabase
+    if (prods && prods.length > 0 && ramStore.products && ramStore.products.length > 0) {
+      const supabaseProductIds = new Set(prods.map((p: any) => p.id));
+      const missingLocalProducts = ramStore.products.filter((p: any) => p && p.id && !supabaseProductIds.has(p.id));
+      if (missingLocalProducts.length > 0) {
+        triggerBackgroundTask(async () => {
+          const bodyPayload = missingLocalProducts.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            brand: p.brand,
+            category: p.category,
+            sub_category: p.subCategory,
+            barcode: p.barcode,
+            images: p.images,
+            unit: p.unit,
+            weight_size: p.weightSize,
+            mrp: p.mrp,
+            selling_price: p.sellingPrice,
+            is_pantry_eligible: p.orderEligibility !== 'QUICK_ONLY',
+            is_quick_order_eligible: p.orderEligibility !== 'PANTRY_ONLY',
+            status: p.status,
+            updated_at: p.updatedAt || new Date().toISOString(),
+          }));
+          await querySupabaseRest('products', {
+            method: 'POST',
+            body: JSON.stringify(bodyPayload),
+          });
+          notifyLocalSubscribers('PRODUCTS_SYNC_PUSH_COMPLETE');
+        });
+      }
+    }
+
+    // Auto-sync locally-stuck batches back to Supabase
+    if (bts && bts.length > 0 && ramStore.batches && ramStore.batches.length > 0) {
+      const supabaseBatchIds = new Set(bts.map((b: any) => b.id));
+      const missingLocalBatches = ramStore.batches.filter((b: any) => b && b.id && !supabaseBatchIds.has(b.id));
+      if (missingLocalBatches.length > 0) {
+        triggerBackgroundTask(async () => {
+          const bodyPayload = missingLocalBatches.map((b: any) => ({
+            id: b.id,
+            product_id: b.productId,
+            product_name: b.productName || '',
+            barcode: b.barcode || '',
+            shopkeeper_name: b.shopkeeperName || '',
+            batch_number: b.batchNumber,
+            mfg_date: b.mfgDate,
+            expiry_date: b.expiryDate,
+            purchase_quantity: b.purchaseQuantity,
+            available_quantity: b.availableQuantity,
+            purchase_price: b.purchasePrice,
+            selling_price: b.sellingPrice,
+            status: b.status || 'ACTIVE',
+            created_at: b.createdAt || new Date().toISOString(),
+          }));
+          await querySupabaseRest('product_batches', {
+            method: 'POST',
+            body: JSON.stringify(bodyPayload),
+          });
+          notifyLocalSubscribers('BATCHES_SYNC_PUSH_COMPLETE');
+        });
+      }
+    }
+
+    // Auto-sync locally-stuck purchases back to Supabase
+    if (purs && purs.length > 0 && ramStore.purchases && ramStore.purchases.length > 0) {
+      const supabasePurchaseIds = new Set(purs.map((p: any) => p.id));
+      const missingLocalPurchases = ramStore.purchases.filter((p: any) => p && p.id && !supabasePurchaseIds.has(p.id));
+      if (missingLocalPurchases.length > 0) {
+        triggerBackgroundTask(async () => {
+          const bodyPayload = missingLocalPurchases.map((p: any) => ({
+            id: p.id,
+            purchase_date: p.purchaseDate,
+            product_id: p.productId,
+            product_name: p.productName,
+            barcode: p.barcode,
+            shopkeeper_name: p.shopkeeperName,
+            batch_number: p.batchNumber,
+            quantity: p.quantity,
+            purchase_price: p.purchasePrice,
+            total_amount: p.totalAmount,
+            created_at: p.createdAt || new Date().toISOString(),
+          }));
+          await querySupabaseRest('purchases', {
+            method: 'POST',
+            body: JSON.stringify(bodyPayload),
+          });
+          notifyLocalSubscribers('PURCHASES_SYNC_PUSH_COMPLETE');
+        });
+      }
+    }
+
     saveRamStoreToLocal();
     notifyLocalSubscribers('PREHEAT_COMPLETE');
   });
