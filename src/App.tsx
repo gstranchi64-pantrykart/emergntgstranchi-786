@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MobileOtpLogin } from './components/auth/MobileOtpLogin';
 import { Navbar } from './components/common/Navbar';
+import { ArrowLeft } from 'lucide-react';
 
 // Admin Components
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -50,6 +51,42 @@ const MainApp: React.FC = () => {
   const [profileDefaultTab, setProfileDefaultTab] = useState<
     'profile' | 'address' | 'history' | 'pantry' | 'pantryPay' | 'tracking' | 'wallet' | 'ledger' | 'audits' | 'stock'
   >('profile');
+
+  // Navigation History State
+  const [navigationHistory, setNavigationHistory] = useState<{ view: string; subTab?: string; filter?: string }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('pm_nav_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Load view from localStorage once authenticated to survive page refreshes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const savedView = localStorage.getItem(`pm_active_view_${user.role}`);
+      if (savedView) {
+        setActiveView(savedView);
+      }
+      const savedSubTab = localStorage.getItem(`pm_admin_sub_tab`);
+      if (savedSubTab) {
+        setAdminSubTab(savedSubTab);
+      }
+      const savedFilter = localStorage.getItem(`pm_admin_filter`);
+      if (savedFilter) {
+        setAdminFilter(savedFilter);
+      }
+    }
+  }, [isAuthenticated, user]);
+
+  // Clear navigation history when the user's role changes to avoid crossing states
+  useEffect(() => {
+    if (user) {
+      setNavigationHistory([]);
+      sessionStorage.removeItem('pm_nav_history');
+    }
+  }, [user?.role]);
 
   if (isLoading) {
     return (
@@ -147,10 +184,58 @@ const MainApp: React.FC = () => {
     );
   };
 
-  const navigateToAdminView = (view: string, subTab?: string, filter?: string) => {
+  const navigateToAdminView = (view: string, subTab?: string, filter?: string, isBackOperation = false) => {
+    const prevView = activeView;
+    const prevSubTab = adminSubTab;
+    const prevFilter = adminFilter;
+
+    // Determine default view if needed
+    const realPrevView = prevView === 'default' ? (
+      user.role === 'ADMIN' ? 'admin-dashboard' :
+      user.role === 'CUSTOMER' ? 'customer-store' :
+      user.role === 'DELIVERY_BOY' ? 'delivery-portal' :
+      user.role === 'AUDITOR' ? 'auditor-portal' : 'admin-dashboard'
+    ) : prevView;
+
+    // Only push to history if it's a new navigation and different view
+    if (!isBackOperation && realPrevView !== view) {
+      setNavigationHistory((prev) => {
+        const updated = [...prev, { view: realPrevView, subTab: prevSubTab, filter: prevFilter }];
+        sessionStorage.setItem('pm_nav_history', JSON.stringify(updated));
+        return updated;
+      });
+    }
+
     setAdminSubTab(subTab);
     setAdminFilter(filter);
     setActiveView(view);
+
+    if (user?.role) {
+      localStorage.setItem(`pm_active_view_${user.role}`, view);
+    }
+    if (subTab) {
+      localStorage.setItem(`pm_admin_sub_tab`, subTab);
+    } else {
+      localStorage.removeItem(`pm_admin_sub_tab`);
+    }
+    if (filter) {
+      localStorage.setItem(`pm_admin_filter`, filter);
+    } else {
+      localStorage.removeItem(`pm_admin_filter`);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (navigationHistory.length === 0) return;
+    
+    const prevNavs = [...navigationHistory];
+    const lastNav = prevNavs.pop();
+    setNavigationHistory(prevNavs);
+    sessionStorage.setItem('pm_nav_history', JSON.stringify(prevNavs));
+
+    if (lastNav) {
+      navigateToAdminView(lastNav.view, lastNav.subTab, lastNav.filter, true);
+    }
   };
 
   // Determine current active view based on role default
@@ -182,6 +267,22 @@ const MainApp: React.FC = () => {
           setIsProfileOpen(true);
         }}
       />
+
+      {/* Global Navigation Back Button Bar */}
+      {navigationHistory.length > 0 && (
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs sticky top-0 z-40">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold transition shadow-3xs border border-emerald-200/60 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Go Back (पीछे जाएं)</span>
+          </button>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-md">
+            Active: {currentView.replace('admin-', '').replace('customer-', '').replace('-', ' ')}
+          </span>
+        </div>
+      )}
 
       {/* Main Content Area - Full width and height on PC/laptops */}
       <main className={`flex-1 w-full max-w-7xl mx-auto p-3 sm:p-5 lg:p-6 xl:p-8 ${user.role === 'CUSTOMER' ? 'pb-20 md:pb-8' : ''}`}>
