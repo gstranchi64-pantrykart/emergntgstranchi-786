@@ -274,7 +274,8 @@ class SupabaseService {
         console.warn('[Supabase] Snapshot sync error (tables may need SQL initialization):', e.message);
       }
 
-      // 2. Try pushing to individual relational tables if they exist in Supabase
+      // 2. Try pushing to individual relational tables if they exist in Supabase (Disabled on backend to prevent overwriting live Single Source of Truth Client PostgREST data)
+      /*
       if (client) {
         try {
           if (dbData.products && dbData.products.length > 0) {
@@ -486,6 +487,7 @@ class SupabaseService {
           console.warn('[Supabase Sync] auditor_checks error:', e.message);
         }
       }
+      */
 
       this.lastSyncAt = timestamp;
       this.lastSyncStatus = 'SUCCESS';

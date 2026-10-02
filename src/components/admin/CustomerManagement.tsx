@@ -45,6 +45,7 @@ import {
   Tag,
   Sparkles,
   Barcode,
+  Trash2,
 } from 'lucide-react';
 import { formatOrderDateTime, getOrderPreciseTimestamp, getDeliveryDayCount } from '../../utils/dateTimeUtils';
 
@@ -228,6 +229,18 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConduc
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to permanently delete Customer "${name}"? This action cannot be undone.`)) {
+      try {
+        await api.deleteCustomer(id);
+        alert('Customer deleted successfully!');
+        fetchCustomers(true);
+      } catch (err: any) {
+        alert(err.message);
+      }
     }
   };
 
@@ -715,6 +728,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConduc
                 >
                   <span>360° Profile</span>
                   <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={() => handleDeleteCustomer(cust.id, cust.fullName)}
+                  className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                  title="Delete Customer"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>

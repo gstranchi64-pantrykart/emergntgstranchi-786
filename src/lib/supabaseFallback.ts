@@ -1095,6 +1095,20 @@ export async function handleDirectSupabaseFetch<T>(
           return { ...body, id: custId } as unknown as T;
         }
       }
+
+      if (method === 'DELETE') {
+        const idMatch = cleanUrl.match(/\/api\/customers\/([^/]+)/);
+        const custId = idMatch ? idMatch[1] : null;
+        if (custId) {
+          if (Array.isArray(ramStore.customers)) {
+            ramStore.customers = ramStore.customers.filter((c: any) => c.id !== custId);
+          }
+          await querySupabaseRest(`customers?id=eq.${custId}`, {
+            method: 'DELETE',
+          });
+          return { success: true, message: 'Customer deleted successfully' } as unknown as T;
+        }
+      }
     }
 
     // ---------------- 6. AUDITOR PANEL API ----------------
@@ -1188,6 +1202,20 @@ export async function handleDirectSupabaseFetch<T>(
           return { ...body, id: audId } as unknown as T;
         }
       }
+
+      if (method === 'DELETE') {
+        const idMatch = cleanUrl.match(/\/api\/auditors\/([^/]+)/);
+        const audId = idMatch ? idMatch[1] : null;
+        if (audId) {
+          if (Array.isArray(ramStore.auditors)) {
+            ramStore.auditors = ramStore.auditors.filter((a: any) => a.id !== audId);
+          }
+          await querySupabaseRest(`auditors?id=eq.${audId}`, {
+            method: 'DELETE',
+          });
+          return { success: true, message: 'Auditor deleted successfully' } as unknown as T;
+        }
+      }
     }
 
     // ---------------- 7. DELIVERY BOY PANEL API ----------------
@@ -1275,6 +1303,20 @@ export async function handleDirectSupabaseFetch<T>(
           });
 
           return { ...body, id: dBoyId } as unknown as T;
+        }
+      }
+
+      if (method === 'DELETE') {
+        const idMatch = cleanUrl.match(/\/api\/delivery-boys\/([^/]+)/);
+        const dBoyId = idMatch ? idMatch[1] : null;
+        if (dBoyId) {
+          if (Array.isArray(ramStore.delivery)) {
+            ramStore.delivery = ramStore.delivery.filter((d: any) => d.id !== dBoyId);
+          }
+          await querySupabaseRest(`delivery_boys?id=eq.${dBoyId}`, {
+            method: 'DELETE',
+          });
+          return { success: true, message: 'Delivery Partner deleted successfully' } as unknown as T;
         }
       }
     }

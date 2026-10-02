@@ -542,6 +542,14 @@ export const api = {
     return result;
   },
 
+  deleteCustomer: async (id: string) => {
+    const result = await fetchJson<{ success: boolean; message: string }>(`/api/customers/${id}`, {
+      method: 'DELETE',
+    });
+    notifyRealtimeMutation('DELETE_CUSTOMER', result);
+    return result;
+  },
+
   updatePantryLimit: async (customerId: string, newLimit: number, reason: string) => {
     const result = await fetchJson<Customer>(`/api/customers/${customerId}/pantry-limit`, {
       method: 'PUT',
@@ -613,6 +621,14 @@ export const api = {
     return result;
   },
 
+  deleteDeliveryBoy: async (id: string) => {
+    const result = await fetchJson<{ success: boolean; message: string }>(`/api/delivery-boys/${id}`, {
+      method: 'DELETE',
+    });
+    notifyRealtimeMutation('DELETE_DELIVERY_BOY', result);
+    return result;
+  },
+
   // Auditors
   getAuditors: async () => {
     return fetchJson<Auditor[]>('/api/auditors');
@@ -637,6 +653,14 @@ export const api = {
       body: JSON.stringify(data),
     });
     notifyRealtimeMutation('UPDATE_AUDITOR', result);
+    return result;
+  },
+
+  deleteAuditor: async (id: string) => {
+    const result = await fetchJson<{ success: boolean; message: string }>(`/api/auditors/${id}`, {
+      method: 'DELETE',
+    });
+    notifyRealtimeMutation('DELETE_AUDITOR', result);
     return result;
   },
 

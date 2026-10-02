@@ -44,6 +44,7 @@ import {
   Image as ImageIcon,
   Download,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import { exportElementToPdf } from '../../utils/pdfGenerator';
 
@@ -214,6 +215,30 @@ export const DeliveryAndAuditorManagement: React.FC<DeliveryAndAuditorManagement
       console.error('Failed to load fleet & staff data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteDeliveryBoy = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to permanently delete Delivery Partner "${name}"? This action cannot be undone.`)) {
+      try {
+        await api.deleteDeliveryBoy(id);
+        alert('Delivery Partner deleted successfully!');
+        fetchData();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  const handleDeleteAuditor = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to permanently delete Auditor "${name}"? This action cannot be undone.`)) {
+      try {
+        await api.deleteAuditor(id);
+        alert('Auditor deleted successfully!');
+        fetchData();
+      } catch (err: any) {
+        alert(err.message);
+      }
     }
   };
 
@@ -770,6 +795,14 @@ export const DeliveryAndAuditorManagement: React.FC<DeliveryAndAuditorManagement
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+
+                      <button
+                        onClick={() => handleDeleteDeliveryBoy(db.id, db.fullName)}
+                        className="p-2 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold transition cursor-pointer shadow-3xs"
+                        title="Delete Delivery Partner"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -971,6 +1004,14 @@ export const DeliveryAndAuditorManagement: React.FC<DeliveryAndAuditorManagement
                           title="Edit Auditor Details"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteAuditor(aud.id, aud.fullName)}
+                          className="p-1.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold transition cursor-pointer shadow-3xs"
+                          title="Delete Auditor"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
