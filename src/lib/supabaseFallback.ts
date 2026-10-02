@@ -919,22 +919,97 @@ export async function handleDirectSupabaseFetch<T>(
         const matchedBatch = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).find(
           (b: any) => b.id === batchIdent || b.batchNumber === batchIdent
         );
-        return {
-          batchId: batchIdent,
-          batchNumber: matchedBatch?.batchNumber || batchIdent,
-          productName: matchedBatch?.productName || 'Sample Product',
-          barcode: matchedBatch?.barcode || '1234567890',
-          availableQuantity: matchedBatch?.availableQuantity || 10,
-          purchaseQuantity: matchedBatch?.purchaseQuantity || 10,
-          status: matchedBatch?.status || 'ACTIVE',
-          ledger: [],
-          orders: [],
-          stats: {
-            totalInward: matchedBatch?.purchaseQuantity || 10,
-            totalOutward: (matchedBatch?.purchaseQuantity || 10) - (matchedBatch?.availableQuantity || 10),
-            totalAdjusted: 0,
-          }
-        } as unknown as T;
+        if (!matchedBatch) return null;
+
+        const matchedProduct = (ramStore.products || []).find((p: any) => p.id === matchedBatch.productId) || {
+          id: matchedBatch.productId,
+          name: matchedBatch.productName || 'Sample Product',
+          brand: 'Standard FMCG',
+          category: 'General',
+          images: ['https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80'],
+          description: 'Stock Item',
+          barcode: matchedBatch.barcode,
+          mrp: matchedBatch.mrp,
+          sellingPrice: matchedBatch.sellingPrice,
+          weightSize: '1 Unit',
+          unit: '1 Unit',
+          discount: 0,
+          orderEligibility: 'BOTH',
+          status: 'PUBLISHED',
+          createdAt: matchedBatch.createdAt,
+          updatedAt: matchedBatch.updatedAt,
+        };
+
+        const nowTime = Date.now();
+        const expTime = new Date(matchedBatch.expiryDate).getTime();
+        const daysRemaining = Math.max(0, Math.ceil((expTime - nowTime) / (1000 * 60 * 60 * 24)));
+        const isExpired = expTime < nowTime;
+        const isNearExpiry = !isExpired && daysRemaining <= 30;
+
+        const summary = {
+          initialStockPurchased: matchedBatch.purchaseQuantity,
+          currentAvailableStock: matchedBatch.availableQuantity,
+          totalDownStock: matchedBatch.purchaseQuantity - matchedBatch.availableQuantity,
+          totalQuickSold: matchedBatch.quickSoldQuantity || 0,
+          totalPantrySold: matchedBatch.pantrySoldQuantity || 0,
+          totalReturned: matchedBatch.returnedQuantity || 0,
+          totalAdjusted: 0,
+          totalPurchaseCost: matchedBatch.purchaseQuantity * (matchedBatch.purchaseRate || matchedBatch.sellingPrice * 0.8),
+          totalSalesRevenue: (matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * matchedBatch.sellingPrice,
+          grossProfit: ((matchedBatch.purchaseQuantity - matchedBatch.availableQuantity) * matchedBatch.sellingPrice) - (matchedBatch.purchaseQuantity * (matchedBatch.purchaseRate || matchedBatch.sellingPrice * 0.8)),
+          grossMarginPercent: 20,
+          isExpired,
+          isNearExpiry,
+          daysRemaining,
+        };
+
+        const ledgerTimeline: any[] = [];
+        ledgerTimeline.push({
+          id: `LEDGER-IN-${matchedBatch.id}`,
+          timestamp: matchedBatch.createdAt,
+          type: 'PURCHASE_INWARD',
+          title: `Purchase Inward Stock (+${matchedBatch.purchaseQuantity} Units)`,
+          quantityChange: matchedBatch.purchaseQuantity,
+          referenceId: matchedBatch.id,
+          partyName: matchedBatch.shopkeeperName || 'General Supplier',
+          operator: 'Admin',
+          operatorRole: 'ADMIN',
+          notes: `Batch Registered. Available Stock: ${matchedBatch.availableQuantity}`,
+          badgeVariant: 'green',
+        });
+
+        const soldQty = matchedBatch.purchaseQuantity - matchedBatch.availableQuantity;
+        if (soldQty > 0) {
+          ledgerTimeline.push({
+            id: `LEDGER-OUT-${matchedBatch.id}`,
+            timestamp: matchedBatch.updatedAt,
+            type: 'PANTRY_SALE',
+            title: `Pantry Deductions (-${soldQty} Units)`,
+            quantityChange: -soldQty,
+            referenceId: matchedBatch.id,
+            partyName: 'Various Customers',
+            operator: 'Fulfillment System',
+            operatorRole: 'SYSTEM',
+            notes: `Atomically deducted.`,
+            badgeVariant: 'red',
+          });
+        }
+
+        const details = {
+          batch: matchedBatch,
+          product: matchedProduct,
+          summary,
+          ledgerTimeline,
+          purchases: [],
+          quickOrders: [],
+          pantryOrders: [],
+          returns: [],
+          replacements: [],
+          auditorChecks: [],
+          auditLogs: [],
+        };
+
+        return details as unknown as T;
       }
     }
 
@@ -954,20 +1029,93 @@ export async function handleDirectSupabaseFetch<T>(
         const filtered = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).filter(
           (b: any) => b.barcode === barc
         );
+        
+        const matchedProduct = (ramStore.products || []).find((p: any) => p.barcode === barc) || {
+          id: 'PRD-MOCK',
+          name: filtered[0]?.productName || 'Sample Barcode Product',
+          brand: filtered[0]?.brand || 'Standard FMCG',
+          category: filtered[0]?.category || 'General',
+          images: ['https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80'],
+          description: 'Stock Item',
+          barcode: barc,
+          mrp: filtered[0]?.mrp || 100,
+          sellingPrice: filtered[0]?.sellingPrice || 90,
+          weightSize: '1 Unit',
+          unit: '1 Unit',
+          discount: 0,
+          orderEligibility: 'BOTH',
+          status: 'PUBLISHED',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
         const totalAvail = filtered.reduce((acc: number, item: any) => acc + item.availableQuantity, 0);
         const totalPurch = filtered.reduce((acc: number, item: any) => acc + item.purchaseQuantity, 0);
-        return {
+        const totalQuick = filtered.reduce((acc: number, item: any) => acc + (item.quickSoldQuantity || 0), 0);
+        const totalPantry = filtered.reduce((acc: number, item: any) => acc + (item.pantrySoldQuantity || 0), 0);
+        const totalRet = filtered.reduce((acc: number, item: any) => acc + (item.returnedQuantity || 0), 0);
+
+        const summary = {
+          totalInwardPurchased: totalPurch,
+          totalAvailableStock: totalAvail,
+          totalSalesDeductions: totalPurch - totalAvail,
+          totalQuickSold: totalQuick,
+          totalPantrySold: totalPantry,
+          totalReturned: totalRet,
+          totalPurchaseCost: totalPurch * (matchedProduct.sellingPrice * 0.8),
+          totalSalesRevenue: (totalPurch - totalAvail) * matchedProduct.sellingPrice,
+          grossProfit: ((totalPurch - totalAvail) * matchedProduct.sellingPrice) - (totalPurch * (matchedProduct.sellingPrice * 0.8)),
+          grossMarginPercent: 20,
+          isExpired: false,
+          isNearExpiry: false,
+          daysToNearestExpiry: 999,
+        };
+
+        const batchesSummary = filtered.map((b: any) => ({
+          batchId: b.id,
+          batchNumber: b.batchNumber,
+          manufacturingDate: b.manufacturingDate,
+          expiryDate: b.expiryDate,
+          costPrice: b.purchaseRate || b.sellingPrice * 0.8,
+          sellingPrice: b.sellingPrice,
+          mrp: b.mrp,
+          purchaseQuantity: b.purchaseQuantity,
+          availableQuantity: b.availableQuantity,
+          quickSoldQuantity: b.quickSoldQuantity || 0,
+          pantrySoldQuantity: b.pantrySoldQuantity || 0,
+          returnedQuantity: b.returnedQuantity || 0,
+          shopkeeperName: b.shopkeeperName,
+          status: b.status || 'ACTIVE',
+        }));
+
+        const ledgerTimeline: any[] = [];
+        filtered.forEach((b: any) => {
+          ledgerTimeline.push({
+            id: `LEDGER-${b.id}`,
+            timestamp: b.createdAt,
+            type: 'PURCHASE_INWARD',
+            title: `Inward Purchase (+${b.purchaseQuantity} Units) [Batch #${b.batchNumber}]`,
+            quantityChange: b.purchaseQuantity,
+            referenceId: b.id,
+            partyName: b.shopkeeperName || 'Ranchi FMCG Wholesale',
+            operator: 'Logistics Admin',
+            operatorRole: 'ADMIN',
+            notes: `Batch Registered. Available Stock: ${b.availableQuantity}`,
+            badgeVariant: 'green',
+          });
+        });
+
+        const details = {
           barcode: barc,
-          productName: filtered[0]?.productName || 'Sample Barcode Product',
-          totalAvailableQuantity: totalAvail,
-          totalPurchaseQuantity: totalPurch,
-          batches: filtered,
-          stats: {
-            totalInward: totalPurch,
-            totalOutward: totalPurch - totalAvail,
-            totalAdjusted: 0,
-          }
-        } as unknown as T;
+          product: matchedProduct,
+          summary,
+          batches: batchesSummary,
+          purchases: [],
+          salesTimeline: [],
+          ledgerTimeline,
+        };
+
+        return details as unknown as T;
       }
     }
 
