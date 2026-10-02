@@ -5862,11 +5862,75 @@ export class BusinessService {
         });
       }
 
-      // 2. Missing items: Wallet Deduction
+      // 2. Missing items: Wallet Deduction (Processed Immediately upon Auditor Check submission!)
       if (qMissing > 0) {
         itemDeduction = qMissing * unitPrice;
         totalDeductions += itemDeduction;
         notAvailableCount += qMissing;
+
+        try {
+          const prevBalance = customer.walletBalance ?? 1000;
+          const newBalance = prevBalance - itemDeduction;
+          customer.walletBalance = newBalance;
+          customer.updatedAt = getToday();
+
+          // Create Wallet Transaction Immediately
+          const wTxn: WalletTransaction = {
+            id: `WTX-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+            customerId: customer.id,
+            customerName: customer.fullName,
+            transactionType: 'AUDIT_DEDUCTION',
+            amount: -itemDeduction,
+            previousBalance: prevBalance,
+            newBalance: newBalance,
+            referenceId: checkId,
+            userId: auditorUser.id,
+            role: 'AUDITOR',
+            reason: `Audit Discrepancy Deduction: ${pci.productName} (${qMissing} Qty Missing, Audit #${checkId})`,
+            date: getToday(),
+            time: getNowTimeWithSeconds(),
+            timestamp: new Date().toISOString(),
+            status: 'SUCCESS',
+          };
+          if (!db.walletTransactions) db.walletTransactions = [];
+          db.walletTransactions.unshift(wTxn);
+
+          chk.walletTransactionId = wTxn.id;
+          chk.walletDeducted = true;
+          chk.walletDeductionAmount = itemDeduction;
+        } catch (err: any) {
+          console.warn('Wallet deduction error during auditor check submission:', err.message);
+        }
+
+        // Only create a duplicate used item if the original is still partially active (qty > 0)
+        // because if the original is fully consumed (qty == 0), the original itself goes to the Used Box!
+        const remainingQty = originalQty - qMissing;
+        if (remainingQty > 0) {
+          const usedPci: PantryCardItem = {
+            id: `PCI-USD-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+            customerId: pci.customerId,
+            customerName: pci.customerName,
+            orderId: pci.orderId,
+            productId: pci.productId,
+            productName: `${pci.productName} (Audit Missing)`,
+            brand: pci.brand,
+            weightSize: pci.weightSize,
+            barcode: pci.barcode,
+            batchId: pci.batchId,
+            batchNumber: pci.batchNumber,
+            manufacturingDate: pci.manufacturingDate || '',
+            expiryDate: pci.expiryDate || '',
+            image: pci.image,
+            quantity: 0, // 0 quantity so it goes to Used History Box
+            unitPrice: pci.unitPrice,
+            totalValue: 0,
+            deliveryDate: pci.deliveryDate,
+            status: 'CONSUMED_AND_PAID', // marked as used & paid
+            createdAt: getToday(),
+            updatedAt: getToday(),
+          };
+          db.pantryCardItems.unshift(usedPci);
+        }
       }
 
       if (qAvail > 0) availableCount += qAvail;
@@ -5879,6 +5943,9 @@ export class BusinessService {
       // The new quantity in the pantry is what was physically found + what is being returned/replaced (until pickup)
       pci.quantity = qAvail + qDamaged + qReturn + qReplace; 
       pci.totalValue = pci.quantity * pci.unitPrice;
+      if (pci.quantity === 0) {
+        pci.status = 'CONSUMED_AND_PAID';
+      }
 
       // 3. Initiate Returns
       if (qReturn > 0) {
@@ -6624,11 +6691,42 @@ export class BusinessService {
       );
       if (pci) {
         const deductQty = (payload as any).quantity || 1;
+        const originalQty = pci.quantity;
         pci.quantity = Math.max(0, (pci.quantity || 0) - deductQty);
         if (pci.quantity === 0) {
           pci.status = 'CONSUMED_AND_PAID';
         }
         pci.updatedAt = getToday();
+
+        // Only create a duplicate used item if the original is still partially active (qty > 0)
+        // because if the original is fully consumed (qty == 0), the original itself goes to the Used Box!
+        const remainingQty = originalQty - deductQty;
+        if (remainingQty > 0) {
+          const usedPci: PantryCardItem = {
+            id: `PCI-PPAY-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+            customerId: pci.customerId,
+            customerName: pci.customerName,
+            orderId: pci.orderId,
+            productId: pci.productId,
+            productName: `${pci.productName} (Pantry Pay)`,
+            brand: pci.brand,
+            weightSize: pci.weightSize,
+            barcode: pci.barcode,
+            batchId: pci.batchId,
+            batchNumber: pci.batchNumber,
+            manufacturingDate: pci.manufacturingDate || '',
+            expiryDate: pci.expiryDate || '',
+            image: pci.image,
+            quantity: 0, // 0 quantity so it goes to Used History Box
+            unitPrice: pci.unitPrice,
+            totalValue: 0,
+            deliveryDate: pci.deliveryDate,
+            status: 'CONSUMED_AND_PAID', // marked as used & paid
+            createdAt: getToday(),
+            updatedAt: getToday(),
+          };
+          db.pantryCardItems.unshift(usedPci);
+        }
       }
     }
 

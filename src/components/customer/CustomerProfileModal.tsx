@@ -1086,7 +1086,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                                     : 'bg-rose-100 text-rose-800'
                                 }`}
                               >
-                                {txn.transactionType.replace(/_/g, ' ')}
+                                {(txn.transactionType || '').replace(/_/g, ' ')}
                               </span>
                               {isLatest && (
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-600 text-white">
@@ -1398,7 +1398,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                                     : 'bg-purple-100 text-purple-800'
                                 }`}
                               >
-                                {entry.transactionType.replace(/_/g, ' ')}
+                                {(entry.transactionType || '').replace(/_/g, ' ')}
                               </span>
                               {isLatest && (
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-purple-700 text-white">
@@ -1758,7 +1758,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                                   : 'bg-amber-100 text-amber-800 border border-amber-200'
                               }`}
                             >
-                              {audit.status.replace(/_/g, ' ')}
+                              {(audit.status || '').replace(/_/g, ' ')}
                             </span>
                           </div>
                         </div>
