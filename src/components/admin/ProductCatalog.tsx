@@ -28,8 +28,22 @@ import {
 } from 'lucide-react';
 
 export const ProductCatalog: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_products');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_products');
+      return !raw || JSON.parse(raw).length === 0;
+    } catch {
+      return false;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -63,13 +77,15 @@ export const ProductCatalog: React.FC = () => {
     ] as [string, string, string, string],
   });
 
-  const fetchProducts = async (isSilent = false) => {
-    if (!isSilent) {
+  const fetchProducts = async (isSilent = true) => {
+    if (!isSilent && products.length === 0) {
       setLoading(true);
     }
     try {
       const list = await api.getProducts(false);
-      setProducts(list);
+      if (Array.isArray(list) && list.length > 0) {
+        setProducts(list);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -78,7 +94,7 @@ export const ProductCatalog: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(true);
     const unsubscribe = api.subscribeRealtime(() => {
       fetchProducts(true);
     });

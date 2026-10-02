@@ -94,13 +94,33 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
       : 'orders'
   );
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
-  const [auditors, setAuditors] = useState<Auditor[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_orders');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_delivery');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [auditors, setAuditors] = useState<Auditor[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_auditors');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [replacements, setReplacements] = useState<ReplacementRequest[]>([]);
   const [batches, setBatches] = useState<ProductBatch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_orders');
+      return !raw || JSON.parse(raw).length === 0;
+    } catch { return false; }
+  });
 
   // Filters
   const [orderTypeFilter, setOrderTypeFilter] = useState<'ALL' | 'PANTRY' | 'QUICK'>('ALL');
@@ -283,8 +303,8 @@ export const OrdersAndDeliveryAdmin: React.FC<OrdersAndDeliveryAdminProps> = ({
   const [orderModalView, setOrderModalView] = useState<'DETAILS' | 'BILL' | 'IMAGES'>('DETAILS');
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
 
-  const fetchData = async (isSilent = false) => {
-    if (!isSilent) {
+  const fetchData = async (isSilent = true) => {
+    if (!isSilent && orders.length === 0) {
       setLoading(true);
     }
     try {

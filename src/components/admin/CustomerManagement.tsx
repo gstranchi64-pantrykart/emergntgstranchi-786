@@ -53,8 +53,22 @@ interface CustomerManagementProps {
 }
 
 export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConductAudit }) => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_customers');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_customers');
+      return !raw || JSON.parse(raw).length === 0;
+    } catch {
+      return false;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PARENT' | 'CHILD' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
@@ -201,13 +215,15 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConduc
   const [rechargeReason, setRechargeReason] = useState('Customer Advance Deposit / Prepaid Balance');
   const [recharging, setRecharging] = useState(false);
 
-  const fetchCustomers = async (isSilent = false) => {
-    if (!isSilent) {
+  const fetchCustomers = async (isSilent = true) => {
+    if (!isSilent && customers.length === 0) {
       setLoading(true);
     }
     try {
       const data = await api.getCustomers();
-      setCustomers(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setCustomers(data);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -216,7 +232,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ onConduc
   };
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(true);
     const unsubscribe = api.subscribeRealtime(() => {
       fetchCustomers(true);
       if (selectedCustomer) {

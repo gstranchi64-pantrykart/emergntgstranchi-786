@@ -290,14 +290,16 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const sep = url.includes('?') ? '&' : '?';
   const finalUrl = method === 'GET' ? `${url}${sep}_t=${Date.now()}` : url;
 
-  const fetchOpts = {
-    ...options,
-    cache: 'no-store' as RequestCache,
-    headers: {
-      ...getHeaders(),
-      ...(options?.headers || {}),
-    },
-  };
+  let requestBodyParsed: any = null;
+  try {
+    if (options?.body) requestBodyParsed = JSON.parse(String(options.body));
+  } catch {}
+
+  // Always prioritize direct Supabase Cloud DB PostgREST engine as Single Source of Truth
+  const directResult = await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
+  if (directResult !== null) {
+    return directResult;
+  }
 
   const candidateUrls: string[] = [];
   
@@ -320,9 +322,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   for (const targetUrl of candidateUrls) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout for fast static site Supabase fallback
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-      const fetchOpts = {
+      const loopOpts = {
         ...options,
         signal: controller.signal,
         cache: 'no-store' as RequestCache,
@@ -332,7 +334,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
         },
       };
 
-      const response = await fetch(targetUrl, fetchOpts);
+      const response = await fetch(targetUrl, loopOpts);
       clearTimeout(timeoutId);
 
       const ct = response.headers.get('content-type') || '';
@@ -350,7 +352,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
       break;
     } catch (e: any) {
       if (e.name === 'AbortError' || (e.message && e.message.includes('aborted'))) {
-        lastError = new Error(`Request to ${url} timed out. Please verify server connection.`);
+        lastError = new Error(`Request to ${url} timed out.`);
       } else {
         lastError = e;
       }
@@ -359,12 +361,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
   // Handle Static Deployment Fallback if backend API is unreachable or returns non-OK status
   if (!res || !res.ok || !(res.headers.get('content-type') || '').includes('application/json')) {
-    let parsedBody: any = null;
-    try {
-      if (options?.body) parsedBody = JSON.parse(String(options.body));
-    } catch {}
-
-    const directSupabaseResult = await handleDirectSupabaseFetch<T>(url, method, parsedBody);
+    const directSupabaseResult = await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
     if (directSupabaseResult !== null) {
       return directSupabaseResult;
     }

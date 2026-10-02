@@ -76,9 +76,24 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
   initialFilter,
   onOpenOrder,
 }) => {
-  const [batches, setBatches] = useState<ProductBatch[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [batches, setBatches] = useState<ProductBatch[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_batches');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_products');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const raw = localStorage.getItem('pm_cached_batches');
+      return !raw || JSON.parse(raw).length === 0;
+    } catch { return false; }
+  });
 
   // View Mode: Barcode Merged vs Batch Wise vs Live Customer Pantry Stock vs All Customer Hold in Pantry Items
   const [viewMode, setViewMode] = useState<
@@ -129,14 +144,14 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
     batch: ProductBatch;
   } | null>(null);
 
-  const fetchData = async (isSilent = false) => {
-    if (!isSilent) {
+  const fetchData = async (isSilent = true) => {
+    if (!isSilent && batches.length === 0) {
       setLoading(true);
     }
     try {
       const [bData, pData] = await Promise.all([api.getBatches(), api.getProducts()]);
-      setBatches(bData);
-      setProducts(pData);
+      if (Array.isArray(bData) && bData.length > 0) setBatches(bData);
+      if (Array.isArray(pData) && pData.length > 0) setProducts(pData);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -145,7 +160,7 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
     const unsubscribe = api.subscribeRealtime(() => {
       fetchData(true);
     });
