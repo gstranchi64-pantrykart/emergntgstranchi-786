@@ -554,6 +554,27 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/customers/:id', async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      
+      // 1. Delete from local store RAM
+      const db = store.getDb();
+      db.customers = db.customers.filter((c) => c.id !== id);
+      store.save();
+      
+      // 2. Delete from Supabase using the admin service-role client (RLS bypass)
+      const client = supabaseService.getClient();
+      if (client) {
+        await client.from('customers').delete().eq('id', id);
+      }
+      
+      return res.json({ success: true, message: 'Customer deleted successfully' });
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
   // ---------------- DELIVERY BOYS ----------------
   app.get('/api/delivery-boys', (_req: Request, res: Response) => {
     return res.json(BusinessService.getDeliveryBoys());
@@ -579,6 +600,28 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/delivery-boys/:id', async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      
+      // 1. Delete from local store RAM
+      const db = store.getDb();
+      db.deliveryBoys = db.deliveryBoys.filter((d) => d.id !== id);
+      db.users = db.users.filter((u) => u.deliveryBoyId !== id);
+      store.save();
+      
+      // 2. Delete from Supabase using the admin service-role client (RLS bypass)
+      const client = supabaseService.getClient();
+      if (client) {
+        await client.from('delivery_boys').delete().eq('id', id);
+      }
+      
+      return res.json({ success: true, message: 'Delivery Partner deleted successfully' });
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
   // ---------------- AUDITORS ----------------
   app.get('/api/auditors', (_req: Request, res: Response) => {
     return res.json(BusinessService.getAuditors());
@@ -599,6 +642,28 @@ async function startServer() {
       const user = getActingUser(req);
       const auditor = BusinessService.updateAuditor(req.params.id, req.body, user);
       return res.json(auditor);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/auditors/:id', async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      
+      // 1. Delete from local store RAM
+      const db = store.getDb();
+      db.auditors = db.auditors.filter((a) => a.id !== id);
+      db.users = db.users.filter((u) => u.auditorId !== id);
+      store.save();
+      
+      // 2. Delete from Supabase using the admin service-role client (RLS bypass)
+      const client = supabaseService.getClient();
+      if (client) {
+        await client.from('auditors').delete().eq('id', id);
+      }
+      
+      return res.json({ success: true, message: 'Auditor deleted successfully' });
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
     }
