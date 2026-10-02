@@ -444,6 +444,67 @@ const DEFAULT_ORDERS_SUPABASE = [
   }
 ];
 
+const DEFAULT_BATCHES_SUPABASE = [
+  {
+    id: 'BATCH-000001',
+    product_id: 'PRD-001',
+    product_name: 'Horlicks Health & Nutrition Drink Classic Malt 500g',
+    barcode: '123456789',
+    batch_number: 'B-MALT-124001',
+    manufacturing_date: '2026-08-01',
+    expiry_date: '2027-08-01',
+    cost_price: 240,
+    selling_price: 285,
+    initial_quantity: 50,
+    available_quantity: 45,
+    sold_quantity: 5,
+    status: 'ACTIVE',
+    storage_bin: 'A-12',
+    shopkeeper_name: 'Ranchi Wholesale FMCG Mart',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'BATCH-000002',
+    product_id: 'PRD-002',
+    product_name: 'Aashirvaad Superior MP Shudh Chakki Atta 5kg',
+    barcode: '8901030382910',
+    batch_number: 'B-ATTA-5KG',
+    manufacturing_date: '2026-09-01',
+    expiry_date: '2027-03-01',
+    cost_price: 225,
+    selling_price: 265,
+    initial_quantity: 100,
+    available_quantity: 92,
+    sold_quantity: 8,
+    status: 'ACTIVE',
+    storage_bin: 'B-04',
+    shopkeeper_name: 'Jharkhand Grain Distributors',
+    created_at: new Date().toISOString()
+  }
+];
+
+const DEFAULT_PURCHASES_SUPABASE = [
+  {
+    id: 'PUR-10001',
+    purchase_date: '2026-09-10',
+    product_id: 'PRD-001',
+    product_name: 'Horlicks Health & Nutrition Drink Classic Malt 500g',
+    barcode: '123456789',
+    batch_number: 'B-MALT-124001',
+    manufacturing_date: '2026-08-01',
+    expiry_date: '2027-08-01',
+    quantity: 50,
+    purchase_rate: 240,
+    mrp: 320,
+    selling_price: 285,
+    shopkeeper_name: 'Ranchi Wholesale FMCG Mart',
+    shopkeeper_contact: '9835123400',
+    invoice_reference: 'INV-2026-9081',
+    notes: 'Premium malt health drink received.',
+    created_at: new Date().toISOString()
+  }
+];
+
 // Single Source of Truth RAM memory cache with LocalStorage persistence backup
 const getInitialStore = () => {
   if (typeof window !== 'undefined') {
@@ -457,6 +518,7 @@ const getInitialStore = () => {
             customers: parsed.customers || null,
             orders: parsed.orders || null,
             batches: parsed.batches || null,
+            purchases: parsed.purchases || null,
             auditors: parsed.auditors || null,
             delivery: parsed.delivery || null,
             categories: parsed.categories || null,
@@ -471,6 +533,7 @@ const getInitialStore = () => {
     customers: null,
     orders: null,
     batches: null,
+    purchases: null,
     auditors: null,
     delivery: null,
     categories: null,
@@ -533,13 +596,15 @@ function triggerBackgroundTask(task: () => Promise<void>) {
 
 export async function seedSupabaseIfEmpty() {
   try {
-    const [prods, custs, ords, auds, deliv, cats] = await Promise.all([
+    const [prods, custs, ords, auds, deliv, cats, bts, purs] = await Promise.all([
       querySupabaseRest<any[]>('products?select=id'),
       querySupabaseRest<any[]>('customers?select=id'),
       querySupabaseRest<any[]>('orders?select=id'),
       querySupabaseRest<any[]>('auditors?select=id'),
       querySupabaseRest<any[]>('delivery_boys?select=id'),
       querySupabaseRest<any[]>('categories?select=id'),
+      querySupabaseRest<any[]>('product_batches?select=id&limit=1'),
+      querySupabaseRest<any[]>('purchases?select=id&limit=1'),
     ]);
 
     if (!prods || prods.length === 0) {
@@ -560,6 +625,12 @@ export async function seedSupabaseIfEmpty() {
     if (!cats || cats.length === 0) {
       await querySupabaseRest('categories', { method: 'POST', body: JSON.stringify(DEFAULT_CATEGORIES_SUPABASE) });
     }
+    if (!bts || bts.length === 0) {
+      await querySupabaseRest('product_batches', { method: 'POST', body: JSON.stringify(DEFAULT_BATCHES_SUPABASE) });
+    }
+    if (!purs || purs.length === 0) {
+      await querySupabaseRest('purchases', { method: 'POST', body: JSON.stringify(DEFAULT_PURCHASES_SUPABASE) });
+    }
   } catch (err) {
     console.warn('[Supabase Seeding Note]', err);
   }
@@ -569,13 +640,15 @@ export function preheatSupabaseConnection() {
   triggerBackgroundTask(async () => {
     await seedSupabaseIfEmpty();
 
-    const [prods, custs, ords, auds, deliv, cats] = await Promise.all([
+    const [prods, custs, ords, auds, deliv, cats, bts, purs] = await Promise.all([
       querySupabaseRest<any[]>('products?select=*'),
       querySupabaseRest<any[]>('customers?select=*'),
       querySupabaseRest<any[]>('orders?select=*&order=created_at.desc'),
       querySupabaseRest<any[]>('auditors?select=*'),
       querySupabaseRest<any[]>('delivery_boys?select=*'),
       querySupabaseRest<any[]>('categories?select=*'),
+      querySupabaseRest<any[]>('product_batches?select=*'),
+      querySupabaseRest<any[]>('purchases?select=*'),
     ]);
 
     if (prods && prods.length > 0) {
@@ -612,6 +685,18 @@ export function preheatSupabaseConnection() {
       ramStore.categories = formatCategoriesFromSupabase(cats);
     } else if (!ramStore.categories) {
       ramStore.categories = formatCategoriesFromSupabase(DEFAULT_CATEGORIES_SUPABASE);
+    }
+
+    if (bts && bts.length > 0) {
+      ramStore.batches = formatBatchesFromSupabase(bts);
+    } else if (!ramStore.batches) {
+      ramStore.batches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+    }
+
+    if (purs && purs.length > 0) {
+      ramStore.purchases = formatPurchasesFromSupabase(purs);
+    } else if (!ramStore.purchases) {
+      ramStore.purchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
     }
 
     saveRamStoreToLocal();
@@ -770,6 +855,283 @@ export async function handleDirectSupabaseFetch<T>(
       });
 
       return summaryObj as unknown as T;
+    }
+
+    // ---------------- 1.1 BATCH INVENTORY & PURCHASES API (REST BYPASS) ----------------
+    if (cleanUrl.endsWith('/api/batches')) {
+      if (method === 'GET') {
+        triggerBackgroundTask(async () => {
+          const data = await querySupabaseRest<any[]>('product_batches?select=*');
+          if (data && data.length > 0) {
+            ramStore.batches = formatBatchesFromSupabase(data);
+            saveRamStoreToLocal();
+          }
+        });
+
+        if (ramStore.batches && ramStore.batches.length > 0) {
+          return ramStore.batches as unknown as T;
+        }
+
+        const data = await querySupabaseRest<any[]>('product_batches?select=*');
+        if (data && data.length > 0) {
+          ramStore.batches = formatBatchesFromSupabase(data);
+          return saveAndReturn(ramStore.batches) as unknown as T;
+        }
+
+        ramStore.batches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        return saveAndReturn(ramStore.batches) as unknown as T;
+      }
+    }
+
+    if (cleanUrl.includes('/api/batches/product/')) {
+      const match = cleanUrl.match(/\/api\/batches\/product\/([^/]+)/);
+      const prodId = match ? match[1] : null;
+      if (prodId) {
+        let batchesList = ramStore.batches;
+        if (!batchesList) {
+          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
+          if (raw) {
+            batchesList = formatBatchesFromSupabase(raw);
+            ramStore.batches = batchesList;
+            saveRamStoreToLocal();
+          }
+        }
+        const filtered = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).filter(
+          (b: any) => b.productId === prodId
+        );
+        return filtered as unknown as T;
+      }
+    }
+
+    if (cleanUrl.includes('/api/batches/') && cleanUrl.endsWith('/details')) {
+      const match = cleanUrl.match(/\/api\/batches\/([^/]+)\/details/);
+      const batchIdent = match ? match[1] : null;
+      if (batchIdent) {
+        let batchesList = ramStore.batches;
+        if (!batchesList) {
+          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
+          if (raw) {
+            batchesList = formatBatchesFromSupabase(raw);
+            ramStore.batches = batchesList;
+            saveRamStoreToLocal();
+          }
+        }
+        const matchedBatch = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).find(
+          (b: any) => b.id === batchIdent || b.batchNumber === batchIdent
+        );
+        return {
+          batchId: batchIdent,
+          batchNumber: matchedBatch?.batchNumber || batchIdent,
+          productName: matchedBatch?.productName || 'Sample Product',
+          barcode: matchedBatch?.barcode || '1234567890',
+          availableQuantity: matchedBatch?.availableQuantity || 10,
+          purchaseQuantity: matchedBatch?.purchaseQuantity || 10,
+          status: matchedBatch?.status || 'ACTIVE',
+          ledger: [],
+          orders: [],
+          stats: {
+            totalInward: matchedBatch?.purchaseQuantity || 10,
+            totalOutward: (matchedBatch?.purchaseQuantity || 10) - (matchedBatch?.availableQuantity || 10),
+            totalAdjusted: 0,
+          }
+        } as unknown as T;
+      }
+    }
+
+    if (cleanUrl.includes('/api/inventory/barcode/') && cleanUrl.endsWith('/details')) {
+      const match = cleanUrl.match(/\/api\/inventory\/barcode\/([^/]+)\/details/);
+      const barc = match ? match[1] : null;
+      if (barc) {
+        let batchesList = ramStore.batches;
+        if (!batchesList) {
+          const raw = await querySupabaseRest<any[]>('product_batches?select=*');
+          if (raw) {
+            batchesList = formatBatchesFromSupabase(raw);
+            ramStore.batches = batchesList;
+            saveRamStoreToLocal();
+          }
+        }
+        const filtered = (batchesList || formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE)).filter(
+          (b: any) => b.barcode === barc
+        );
+        const totalAvail = filtered.reduce((acc: number, item: any) => acc + item.availableQuantity, 0);
+        const totalPurch = filtered.reduce((acc: number, item: any) => acc + item.purchaseQuantity, 0);
+        return {
+          barcode: barc,
+          productName: filtered[0]?.productName || 'Sample Barcode Product',
+          totalAvailableQuantity: totalAvail,
+          totalPurchaseQuantity: totalPurch,
+          batches: filtered,
+          stats: {
+            totalInward: totalPurch,
+            totalOutward: totalPurch - totalAvail,
+            totalAdjusted: 0,
+          }
+        } as unknown as T;
+      }
+    }
+
+    if (cleanUrl.endsWith('/api/purchases')) {
+      if (method === 'GET') {
+        triggerBackgroundTask(async () => {
+          const data = await querySupabaseRest<any[]>('purchases?select=*');
+          if (data && data.length > 0) {
+            ramStore.purchases = formatPurchasesFromSupabase(data);
+            saveRamStoreToLocal();
+          }
+        });
+
+        if (ramStore.purchases && ramStore.purchases.length > 0) {
+          return ramStore.purchases as unknown as T;
+        }
+
+        const data = await querySupabaseRest<any[]>('purchases?select=*');
+        if (data && data.length > 0) {
+          ramStore.purchases = formatPurchasesFromSupabase(data);
+          return saveAndReturn(ramStore.purchases) as unknown as T;
+        }
+
+        ramStore.purchases = formatPurchasesFromSupabase(DEFAULT_PURCHASES_SUPABASE);
+        return saveAndReturn(ramStore.purchases) as unknown as T;
+      }
+
+      if (method === 'POST' && body) {
+        const purId = `PUR-${Date.now().toString(36).toUpperCase()}`;
+        const batchId = `BAT-${Date.now().toString(36).toUpperCase()}`;
+        
+        const newPurchase = {
+          id: purId,
+          purchase_date: body.purchaseDate || new Date().toISOString().split('T')[0],
+          product_id: body.productId || `PRD-GUEST`,
+          product_name: body.productName || 'Purchase Product',
+          barcode: body.barcode || '',
+          batch_number: body.batchNumber || 'BATCH-001',
+          manufacturing_date: body.manufacturingDate || new Date().toISOString().split('T')[0],
+          expiry_date: body.expiryDate || new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0],
+          quantity: Number(body.quantity || 1),
+          purchase_rate: Number(body.purchaseRate || body.costPrice || 0),
+          mrp: Number(body.mrp || 0),
+          selling_price: Number(body.sellingPrice || 0),
+          shopkeeper_name: body.shopkeeperName || 'General Supplier',
+          shopkeeper_contact: body.shopkeeperContact || '',
+          invoice_reference: body.invoiceReference || '',
+          notes: body.notes || '',
+        };
+
+        const formattedPurchase = formatPurchasesFromSupabase([newPurchase])[0];
+
+        if (!Array.isArray(ramStore.purchases)) {
+          ramStore.purchases = [];
+        }
+        ramStore.purchases.unshift(formattedPurchase);
+
+        // Update or insert batch
+        if (!Array.isArray(ramStore.batches)) {
+          ramStore.batches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        }
+
+        const existingBatchIndex = ramStore.batches.findIndex(
+          (b: any) => b.productId === newPurchase.product_id && b.batchNumber === newPurchase.batch_number
+        );
+
+        let finalBatch: any;
+        let isNew = true;
+
+        if (existingBatchIndex >= 0) {
+          isNew = false;
+          const old = ramStore.batches[existingBatchIndex];
+          finalBatch = {
+            ...old,
+            purchaseQuantity: old.purchaseQuantity + newPurchase.quantity,
+            availableQuantity: old.availableQuantity + newPurchase.quantity,
+            updatedAt: new Date().toISOString(),
+          };
+          ramStore.batches[existingBatchIndex] = finalBatch;
+
+          // Sync PATCH to Supabase table
+          triggerBackgroundTask(async () => {
+            await querySupabaseRest(`product_batches?id=eq.${old.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                initial_quantity: finalBatch.purchaseQuantity,
+                available_quantity: finalBatch.availableQuantity,
+                updated_at: finalBatch.updatedAt,
+              }),
+            });
+          });
+        } else {
+          const newBatchDb = {
+            id: batchId,
+            product_id: newPurchase.product_id,
+            product_name: newPurchase.product_name,
+            barcode: newPurchase.barcode,
+            batch_number: newPurchase.batch_number,
+            manufacturing_date: newPurchase.manufacturing_date,
+            expiry_date: newPurchase.expiry_date,
+            cost_price: newPurchase.purchase_rate,
+            selling_price: newPurchase.selling_price,
+            initial_quantity: newPurchase.quantity,
+            available_quantity: newPurchase.quantity,
+            sold_quantity: 0,
+            status: 'ACTIVE',
+            storage_bin: 'A-01',
+            shopkeeper_name: newPurchase.shopkeeper_name,
+          };
+          finalBatch = formatBatchesFromSupabase([newBatchDb])[0];
+          ramStore.batches.unshift(finalBatch);
+
+          // Sync POST to Supabase table
+          triggerBackgroundTask(async () => {
+            await querySupabaseRest('product_batches', {
+              method: 'POST',
+              body: JSON.stringify([newBatchDb]),
+            });
+          });
+        }
+
+        // Sync POST purchase to Supabase table
+        triggerBackgroundTask(async () => {
+          await querySupabaseRest('purchases', {
+            method: 'POST',
+            body: JSON.stringify([newPurchase]),
+          });
+        });
+
+        return saveAndReturn({
+          purchase: formattedPurchase,
+          batch: finalBatch,
+          isNewBatch: isNew,
+        } as unknown as T);
+      }
+    }
+
+    if (cleanUrl.endsWith('/api/batches/adjust')) {
+      if (method === 'POST' && body) {
+        const { batchId, newAvailableQty, reason } = body;
+        if (!Array.isArray(ramStore.batches)) {
+          ramStore.batches = formatBatchesFromSupabase(DEFAULT_BATCHES_SUPABASE);
+        }
+        
+        const idx = ramStore.batches.findIndex((b: any) => b.id === batchId);
+        if (idx >= 0) {
+          ramStore.batches[idx].availableQuantity = Number(newAvailableQty);
+          ramStore.batches[idx].updatedAt = new Date().toISOString();
+          
+          const updated = ramStore.batches[idx];
+          
+          triggerBackgroundTask(async () => {
+            await querySupabaseRest(`product_batches?id=eq.${batchId}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                available_quantity: Number(newAvailableQty),
+                updated_at: updated.updatedAt,
+              }),
+            });
+          });
+          
+          return saveAndReturn(updated as unknown as T);
+        }
+      }
     }
 
     // ---------------- 2. PRODUCTS MASTER & IMAGES API ----------------
@@ -1618,5 +1980,52 @@ function formatCategoriesFromSupabase(data: any[]) {
     icon: c.icon || 'Package',
     image: c.image || '',
     subcategories: c.subcategories || [],
+  }));
+}
+
+function formatBatchesFromSupabase(data: any[]): any[] {
+  return data.map((b: any) => ({
+    id: b.id,
+    productId: b.product_id || b.productId,
+    productName: b.product_name || b.productName,
+    barcode: b.barcode,
+    batchNumber: b.batch_number || b.batchNumber,
+    manufacturingDate: b.manufacturing_date || b.manufacturingDate,
+    expiryDate: b.expiry_date || b.expiryDate,
+    purchaseQuantity: Number(b.initial_quantity || b.purchaseQuantity || 0),
+    availableQuantity: Number(b.available_quantity || b.availableQuantity || 0),
+    reservedQuantity: Number(b.reserved_quantity || b.reservedQuantity || 0),
+    quickSoldQuantity: Number(b.quick_sold_quantity || b.quickSoldQuantity || 0),
+    pantrySoldQuantity: Number(b.pantry_sold_quantity || b.pantrySoldQuantity || 0),
+    returnedQuantity: Number(b.returned_quantity || b.returnedQuantity || 0),
+    shopkeeperName: b.shopkeeper_name || b.shopkeeperName || 'General Supplier',
+    shopkeeperContact: b.shopkeeper_contact || b.shopkeeperContact || '',
+    purchaseRate: Number(b.cost_price || b.purchaseRate || 0),
+    mrp: Number(b.mrp || 0),
+    sellingPrice: Number(b.selling_price || b.sellingPrice || 0),
+    createdAt: b.created_at || b.createdAt || new Date().toISOString(),
+    updatedAt: b.updated_at || b.updatedAt || new Date().toISOString(),
+  }));
+}
+
+function formatPurchasesFromSupabase(data: any[]): any[] {
+  return data.map((p: any) => ({
+    id: p.id,
+    purchaseDate: p.purchase_date || p.purchaseDate || new Date().toISOString().split('T')[0],
+    productId: p.product_id || p.productId,
+    productName: p.product_name || p.productName,
+    barcode: p.barcode,
+    batchNumber: p.batch_number || p.batchNumber,
+    manufacturingDate: p.manufacturing_date || p.manufacturingDate,
+    expiryDate: p.expiry_date || p.expiryDate,
+    quantity: Number(p.quantity || 0),
+    purchaseRate: Number(p.purchase_rate || p.purchaseRate || 0),
+    mrp: Number(p.mrp || 0),
+    sellingPrice: Number(p.selling_price || p.sellingPrice || 0),
+    shopkeeperName: p.shopkeeper_name || p.shopkeeperName || 'General Supplier',
+    shopkeeperContact: p.shopkeeper_contact || p.shopkeeperContact || '',
+    invoiceReference: p.invoice_reference || p.invoiceReference || '',
+    notes: p.notes || '',
+    createdAt: p.created_at || p.createdAt || new Date().toISOString(),
   }));
 }
