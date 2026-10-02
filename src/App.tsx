@@ -85,6 +85,7 @@ const MainApp: React.FC = () => {
     if (user) {
       setNavigationHistory([]);
       sessionStorage.removeItem('pm_nav_history');
+      setActiveView('default');
     }
   }, [user?.role]);
 

@@ -90,6 +90,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('pm_customer');
     localStorage.removeItem('pm_delivery_boy');
     localStorage.removeItem('pm_auditor');
+    localStorage.removeItem('pm_active_view_ADMIN');
+    localStorage.removeItem('pm_active_view_CUSTOMER');
+    localStorage.removeItem('pm_active_view_DELIVERY_BOY');
+    localStorage.removeItem('pm_active_view_AUDITOR');
+    localStorage.removeItem('pm_admin_sub_tab');
+    localStorage.removeItem('pm_admin_filter');
+    sessionStorage.removeItem('pm_nav_history');
   };
 
   const refreshUserData = async () => {
