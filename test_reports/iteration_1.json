@@ -1,0 +1,71 @@
+{
+  "summary": "Frontend E2E testing of Pantry Pay feature for Customer Ramesh. Login OK, Pantry Pay tab opens (via My Profile -> Live Pantry Stock -> Pantry Pay tab in CustomerProfileModal). Invalid-barcode validation works (shows 'No item found' message). Pill-based add + Razorpay demo popup (methods -> UPI details -> Pay -> OTP -> AutoOTP -> Confirm) shows success toast 'Razorpay Payment Recorded!'. However, two critical issues found: (1) Live Barcode Camera Scanner crashes the entire app via ErrorBoundary immediately on open in the test env (and will reproduce in any environment where cameras are unavailable or on React 19 StrictMode double-invoked effects) due to unhandled sync throw from html5-qrcode `scanner.stop()` during useEffect cleanup; (2) Browser-side GETs to /api/* through the public preview URL return 502 (ingress routing is broken for /api on this environment), so Payment History shows 0 after a successful payment and the paid-item consumption cannot be visually verified through the UI. Backend (localhost:3000) itself works (confirmed via curl: existing Horlicks payment is present) — the 502s are an infra/ingress issue for the preview URL, not a code bug.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BarcodeCameraScanner (src/components/customer/BarcodeCameraScanner.tsx)",
+        "issue": "Opening 'Scan via Mobile Camera' overlay crashes the whole app via ErrorBoundary with 'Cannot stop, scanner is not running or paused.' React 19 StrictMode (and any failed camera init path) triggers the useEffect cleanup to call html5-qrcode `scanner.stop()` before/while the scanner is still starting; `.stop()` throws SYNCHRONOUSLY (bypassing the `.catch(() => {})` in the promise chain), bubbles to React and the overlay never renders. The task's accepted fallback of showing a 'camera permission denied' message does NOT happen — instead the entire dashboard goes to 'An unexpected display issue occurred'.",
+        "selector": "[data-testid=pantry-pay-camera-scan-button] -> [data-testid=barcode-scanner-overlay]",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "PantryPayScannerUI handleBarcodeSearch",
+        "issue": "Error message set via setErrorMsg(...) is not visible to the user without scrolling. It renders below the pills list / outside viewport. 'No item found' message was present in DOM but not shown on initial screen — add scrollIntoView or move the error element above the input/pill grid.",
+        "selector": "input[placeholder*='Scan barcode']",
+        "priority": "LOW"
+      },
+      {
+        "component": "Pantry In-Stock Pills (seed data)",
+        "issue": "37 'Pantry Product (1 kg)' items with the same barcode [1234567890] and ₹100 each are listed under 'Available Pantry In-Stock Items' for Ramesh — looks like leftover test clutter from CRUD testing. Makes the UI confusing and makes it very hard to pick the real Horlicks product referenced in the backend seed.",
+        "selector": "button:has-text('In Pantry:')",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Pantry Pay -> Payment History tab (and all /api/* reads from browser)",
+        "issue": "All browser-side XHRs to /api/pantry-payments and /api/pantry-payments/customer/CUS-000001 return 502 Bad Gateway from the preview ingress (verified: `curl https://<preview>/api/health` = 502, `curl https://<preview>/api/pantry-payments` = 502, but `curl http://localhost:3000/api/pantry-payments` = 200 with the Horlicks record). Because of this: (a) Payment History tab shows 'Payment History (0) — No external Razorpay payments logged yet' even though the backend has records; (b) After the UI's demo Razorpay 'success' screen, we cannot confirm whether `api.createPantryPayment` actually persisted to the Node backend from the browser (the fallback path in src/services/api.ts tries 'direct Supabase' and alt hosts, hiding this). This is an environment ingress misconfiguration — /api/* on the preview URL is NOT being proxied to the Node server on port 3000 even though root `/` is. Needs preview ingress fix (route /api/* to port 3000, same program as root).",
+        "affected_selectors": ["[data-testid=... Payment History tab ...]", "button:has-text('Refresh History')"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Login landing page",
+        "issues": ["Heading says 'CONSUMER TO SCAN PANTRYKART' which reads awkwardly; appears to be a typo/mojibake of a longer phrase."]
+      },
+      {
+        "screen": "Customer header dropdown (My Profile & Passbook All Menu)",
+        "issues": ["There is NO direct 'Pantry Pay' entry in this dropdown. Users have to click 'Live Pantry Stock' which opens the profile modal and then switch to the 'Pantry Pay' sub-tab. The task description references a 'QR/Pantry Pay option in customer area/bottom nav', but no such entry/bottom-nav exists on desktop. Discoverability is poor."]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "FIX (frontend): BarcodeCameraScanner — guard the useEffect cleanup so a sync throw from html5-qrcode `.stop()` cannot escape. E.g. wrap in try{...}catch{} AND only call stop() when `scanner.getState?.() === 2 /*SCANNING*/`. This prevents the whole-app ErrorBoundary crash when the camera is unavailable OR when React 19 StrictMode double-invokes effects.",
+    "FIX (frontend/UX): When camera init fails (no device / permission denied), the component already builds a cameraError string — but the overlay never renders because the earlier sync-throw crashes the whole subtree. After the fix above verify the overlay renders with the error state and the data-testid=barcode-scanner-close-button is clickable (task's acceptable fallback).",
+    "FIX (infra): Preview URL ingress is 502-ing ALL /api/* requests (confirmed by curl to https://<preview>/api/health = 502 while localhost:3000/api/health = 200). The frontend therefore cannot read payment history and can only 'succeed' due to the api.ts fallback shim. The Kubernetes ingress / nginx-code-proxy must route /api/* on this preview domain to the same `pantrykart` program (port 3000) as the root `/`.",
+    "FIX (frontend): Move the error message panel ABOVE the input + pill grid (or scroll into view when setErrorMsg is set) so users actually see 'No item found' / 'is not available in your home pantry stock' / 'is consumed/used' messages without scrolling.",
+    "CLEANUP (seed data): Ramesh's pantry has 37 duplicate 'Pantry Product (1 kg)' items with barcode 1234567890 — remove test clutter so the Horlicks product referenced in the backend seed is actually visible/selectable from the UI.",
+    "ADD (UX): Add a direct 'Pantry Pay' entry in the 'My Profile & Passbook All Menu' dropdown and/or a bottom-nav shortcut for customers (task description expects this)."
+  ],
+  "critical_code_review_comments": [
+    "BarcodeCameraScanner cleanup is NOT crash-safe. html5-qrcode `.stop()` throws synchronously when state != SCANNING, so the `.catch(() => {})` on the promise chain never runs. The effect also depends on `onDetected` — if the parent re-creates that function on every render, the effect will re-run and the cleanup will fire against a scanner that has not finished starting. Memoize `onDetected` with useCallback OR drop it from the dep array.",
+    "PantryPayScannerUI.handleBarcodeSearch is invoked on every onChange keystroke (line 821-823) and SILENTLY mutates scannedItems if a short substring (e.g. 'p') matches many products via `name.toLowerCase().includes(clean)`. This can lead to accidental additions and surprising state updates while typing. Debounce or only act on Enter / explicit Add action.",
+    "PantryPayScannerUI.tsx is 1156 lines — split into (a) ScannerInput, (b) ScannedList, (c) RazorpayDemoModal, (d) PaymentHistoryList, (e) hooks. Current size violates the <700-line guideline and makes the Razorpay demo state machine hard to audit.",
+    "src/services/api.ts fetchJson has a 'direct Supabase fetch' + multi-host fallback (lines 299-317) that silently masks real API failures. Payment-success paths should fail LOUDLY if the real backend is unreachable rather than reporting a false success on the UI.",
+    "server.ts is served alongside Vite dev server on port 3000; preview ingress treats /api as a different upstream and returns 502. Either (a) make the Node server proxy /api from the dev-server port, or (b) make REACT_APP_BACKEND_URL / an api.ts base-URL explicit instead of relying on same-origin.",
+    "ErrorBoundary (App.tsx line 427) catches, but then resets the entire session via `localStorage.removeItem('pm_token'); window.location.reload()` — a camera-component bug should NOT force the user to re-login. Reset should be scoped (e.g. just unmount the scanner subtree)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not re-tested, previously green via curl)", "frontend": "~55% (login, pantry-pay open, invalid-barcode validation, pill add, Razorpay demo popup flow all OK; camera scan crashes app; payment history + consumption verification blocked by 502 ingress; admin + auditor views NOT verified)"},
+  "test_credentials": "Customer 9123456780 / OTP 123456 (Ramesh); Admin 9876543210 / 123456; Auditor 9876500001 / 123456",
+  "seed_data_creation": "None added. Observed 37 duplicate 'Pantry Product (1 kg)' items in Ramesh's pantry (likely leftover test clutter).",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "To open Pantry Pay as customer: Login (9123456780 / 123456) -> top-right 'My Profile & Passbook All Menu' -> click 'Live Pantry Stock' (this opens the Customer Profile modal) -> click the 'Pantry Pay' tab. Only data-testid currently exposed in the scanner UI is `pantry-pay-camera-scan-button`. BarcodeCameraScanner exposes `barcode-scanner-overlay` and `barcode-scanner-close-button` but you will NOT see them until the sync-throw bug is fixed — currently clicking Scan via Mobile Camera trips the global ErrorBoundary ('PantryMaster ERP Loaded — An unexpected display issue occurred'). Public preview /api/* currently returns 502 (ingress) while localhost:3000/api works — if the ingress is fixed, re-test History and admin/auditor flows end-to-end.",
+  "rca of the issue": "(1) Camera-overlay app crash — RCA: BarcodeCameraScanner's useEffect cleanup calls html5-qrcode `scanner.stop()` without checking state. When the scanner hasn't actually started (headless browser, permission denied, or React 19 StrictMode double-invocation of effects), `.stop()` throws SYNCHRONOUSLY 'Cannot stop, scanner is not running or paused.' The attached `.catch(() => {})` only handles rejected Promises, not sync throws, so the exception bubbles to React, which unmounts the subtree and triggers the top-level ErrorBoundary in App.tsx. Reproduction: as Customer, open Pantry Pay -> click 'Scan via Mobile Camera' -> entire dashboard replaced by 'PantryMaster ERP Loaded — An unexpected display issue occurred'. Mitigation: wrap stop/clear in try/catch and additionally guard with `if (scanner.getState() === Html5QrcodeScannerState.SCANNING)`; memoize onDetected with useCallback so the start-effect doesn't re-run. (2) Payment History shows 0 — RCA: All browser-side GETs to /api/pantry-payments through the preview URL return 502 (confirmed `curl https://<preview>/api/health` -> 502). Infra ingress isn't forwarding /api/* to the pantrykart program on :3000. Localhost curl returns 200 with the Horlicks seed. Mitigation: fix preview ingress to proxy /api/* to the same program as root (:3000)."
+}

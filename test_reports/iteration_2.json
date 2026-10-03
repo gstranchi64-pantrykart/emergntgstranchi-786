@@ -1,0 +1,36 @@
+{
+  "summary": "Verified Auditor Field Audit Bill fix via (A) pytest regression suite hitting the exact HTTP endpoints the UI calls (POST /api/auditor-checks and POST /api/auditor-checks/:id/confirm-bill) and (B) partial UI walkthrough. All 5 pytest tests pass: baseline is clean (wallet=1000, availLimit=8823); auditor submit of a MISSING item does NOT touch wallet or limit; after customer confirm wallet drops by exactly qty*price (Dettol 185 -> wallet 815) and availLimit stays 8823; second confirm attempt is a NO-OP (no double deduction, bill is LOCKED+isBillConfirmed=true); RETURN flow raises availLimit by qty*price while wallet is untouched; wallet/limit are independent fields. UI: auditor and customer login flows work via one-click quick-login + OTP 123456; customer profile modal 'Audits & Permissions' tab renders, shows existing seed audits with 'Approve Permission' buttons, baseline wallet ₹1,000 and limit 8,823/₹10,000 are visible; the auditor portal correctly shows the 'Customer Confirmation & Permission Pending' lock before the auditor can review items. Full end-to-end UI click-through of (schedule -> customer confirm permission -> auditor fills qty inputs -> submit bill -> customer approve bill) was not completed because the auditor portal has no data-testids and requires a multi-step scheduling flow that was slow/flaky to drive via text selectors; however the backend endpoints the UI calls are proven correct and the UI surfaces required to render + approve bills are present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login landing", "issues": ["Heading 'CONSUMER TO SCAN PANTRYKART' reads awkwardly (same note as iter 1)."]},
+      {"screen": "Auditor Portal", "issues": ["Auditor id/name mismatch: when logging in via mobile 9876500001 (Suresh Field Auditor, AUD-001), the auditor selector dropdown defaults to 'Vikas Verma (AUD-000003)' and lists several other auditors (AUD-000001, AUD-000003, AUD-000004) instead of the logged-in Suresh (AUD-001). Looks like two different auditor data sources (seed data in server/store vs auditor table in Supabase) coexist in the UI."]},
+      {"screen": "Customer Audits & Permissions tab", "issues": ["AUD-CHK-* audit checks created via POST /api/auditor-checks do not appear in this list (only AUD-REQ-/AUD-000* scheduled audits appear). Customers submitting an auditor-generated bill via the quicker /api/auditor-checks path will not see the bill here to approve/reject it via the UI — they need the full 'request-audit then generate-bill' flow. This is a UI/data-source consistency gap."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_bill_flow.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Low) Fix auditor dropdown to default to and scope by the logged-in auditor's AUD-001 record instead of showing a different auditor list.",
+    "(Medium) Make the customer 'Audits & Permissions' tab also list audit checks created via POST /api/auditor-checks (AUD-CHK-*) so the customer can view & Approve/Reject them from the UI. Currently only scheduled audit *requests* (AUD-REQ-*) show up; the actual auditor-generated bills reachable at /api/auditor-checks/:id/confirm-bill are only approvable via API/curl.",
+    "(Low) Add data-testid attributes across AuditorPortal.tsx (customer select, qty inputs for missing/return/replacement/pantry-pay, submit/generate-bill button, customer-confirm permission button, confirm-bill button) — current absence makes robust UI regression testing of this bug impossible."
+  ],
+  "critical_code_review_comments": [
+    "AuditorPortal.tsx is huge (3000+ lines) with no data-testids — split into subcomponents and expose test ids.",
+    "Two data sources for auditors cause the UI to show a different auditor from the one that is actually logged in — unify under /api/auditors or filter dropdown by session.auditorId.",
+    "Customer 'Audits & Permissions' panel only lists scheduled audit requests, not AuditorCheck records; the bill-confirm button only renders for scheduled audits — customers cannot Approve an AuditorCheck bill through the UI even though the backend confirm-bill endpoint accepts both /api/audits/:id/confirm-bill and /api/auditor-checks/:id/confirm-bill. Fix the list query to include both.",
+    "server/businessLogic.ts submitAuditorCheck now correctly skips side effects and confirmAuditBillByCustomer is idempotent (second confirm returns LOCKED without re-deducting) — code change looks correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_audit_bill_flow.py"],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "~60% (login + navigation + modal + tab rendering OK; full submit->approve click flow not completed due to lack of data-testids and multi-step scheduling precondition)"},
+  "test_credentials": "Auditor 9876500001/OTP 123456 (Suresh AUD-001); Customer Ramesh 9123456780/OTP 123456 (CUS-000001, wallet 1000, pantryLimit 10000, availLimit 8823); Admin 9876543210/OTP 123456",
+  "seed_data_creation": "Each pytest run creates one audit check per flow (missing/return) which gets LOCKED on confirm; no new customers/products added. Supervisor-restart of pantrykart reloads seed baseline.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The audit bill fix is PROVEN via /app/backend/tests/test_audit_bill_flow.py (run with REACT_APP_BACKEND_URL=https://<preview>). Each full test run requires a clean baseline — restart the pantrykart supervisor program to reset wallet to 1000 and availLimit to 8823. Expected deltas: missing Dettol@185 -> wallet 1000->815, availLimit unchanged 8823; return Aashirvaad@265 -> wallet unchanged, availLimit 8823->9088. Second POST to /api/auditor-checks/:id/confirm-bill returns the LOCKED bill without re-deducting (verified). UI gap: AUD-CHK-* bills do not render in customer 'Audits & Permissions' panel — only scheduled AUD-REQ-/AUD-000* audits do.",
+  "rca of the issue": "Backend RCA already applied by main agent and re-verified: (a) submitAuditorCheck (server/businessLogic.ts ~L5774) now computes estimates only — no wallet/stock/limit mutation; (b) confirmAuditBillByCustomer (~L5355) applies deductCustomerWallet + stock reduce + auditMissingHold for missing, approveAndCompleteReturn for return (which bumps availablePantryLimit via syncChildCustomerWithParent recompute), and used->in-stock transfer for replacement; (c) idempotency enforced via isBillConfirmed/LOCKED guard so a repeated confirm POST does not double-apply. UI gap (not a bug fix regression but worth noting): the customer-facing Audits & Permissions tab only enumerates scheduled audit requests, not direct AuditorCheck records, so a customer cannot click 'Approve' on a bill submitted via POST /api/auditor-checks — they can only approve bills generated through the scheduled /api/audits request flow."
+}

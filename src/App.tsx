@@ -1,0 +1,483 @@
+import React, { useState, useEffect } from 'react';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { MobileOtpLogin } from './components/auth/MobileOtpLogin';
+import { Navbar } from './components/common/Navbar';
+import { ArrowLeft } from 'lucide-react';
+
+// Admin Components
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { BatchInventoryManagement } from './components/admin/BatchInventoryManagement';
+import { PurchaseStockIn } from './components/admin/PurchaseStockIn';
+import { ProductCatalog } from './components/admin/ProductCatalog';
+import { CustomerManagement } from './components/admin/CustomerManagement';
+import { OrdersAndDeliveryAdmin } from './components/admin/OrdersAndDeliveryAdmin';
+import { DeliveryAndAuditorManagement } from './components/admin/DeliveryAndAuditorManagement';
+import { AuditorReturnOrdersAdmin } from './components/admin/AuditorReturnOrdersAdmin';
+import { ReportsAndLogsAdmin } from './components/admin/ReportsAndLogsAdmin';
+import { PantryPayPaymentsAdmin } from './components/admin/PantryPayPaymentsAdmin';
+import { AdminNotificationCenter } from './components/admin/AdminNotificationCenter';
+
+// Customer Components
+import { CustomerStorefront } from './components/customer/CustomerStorefront';
+import { PantryCardPortal } from './components/customer/PantryCardPortal';
+import { CustomerOrdersHistory } from './components/customer/CustomerOrdersHistory';
+import { PantryCartModal, CartItem } from './components/customer/PantryCartModal';
+import { QuickCartModal } from './components/customer/QuickCartModal';
+import { CustomerProfileModal } from './components/customer/CustomerProfileModal';
+import { CustomerBottomNav } from './components/customer/CustomerBottomNav';
+
+// Delivery & Auditor Components
+import { DeliveryBoyPortal } from './components/delivery/DeliveryBoyPortal';
+import { AuditorPortal } from './components/auditor/AuditorPortal';
+import { Product, ProductBatch, hasPantryAccess } from './types';
+
+const MainApp: React.FC = () => {
+  const { user, customer, isAuthenticated, isLoading } = useAuth();
+  const [activeView, setActiveView] = useState<string>('default');
+
+  // Sub-tab/filter states for navigation between dashboard cards and specific admin screens
+  const [adminSubTab, setAdminSubTab] = useState<string | undefined>(undefined);
+  const [adminFilter, setAdminFilter] = useState<string | undefined>(undefined);
+
+  // Cart & Profile States for Customer
+  const [pantryCart, setPantryCart] = useState<CartItem[]>([]);
+  const [quickCart, setQuickCart] = useState<CartItem[]>([]);
+  const [isPantryCartOpen, setIsPantryCartOpen] = useState(false);
+  const [isQuickCartOpen, setIsQuickCartOpen] = useState(false);
+
+  // Profile Modal State
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileDefaultTab, setProfileDefaultTab] = useState<
+    'profile' | 'address' | 'history' | 'pantry' | 'pantryPay' | 'tracking' | 'wallet' | 'ledger' | 'audits' | 'stock'
+  >('profile');
+
+  // Navigation History State
+  const [navigationHistory, setNavigationHistory] = useState<{ view: string; subTab?: string; filter?: string }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('pm_nav_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Load view from localStorage once authenticated to survive page refreshes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const savedView = localStorage.getItem(`pm_active_view_${user.role}`);
+      if (savedView) {
+        setActiveView(savedView);
+      }
+      const savedSubTab = localStorage.getItem(`pm_admin_sub_tab`);
+      if (savedSubTab) {
+        setAdminSubTab(savedSubTab);
+      }
+      const savedFilter = localStorage.getItem(`pm_admin_filter`);
+      if (savedFilter) {
+        setAdminFilter(savedFilter);
+      }
+    }
+  }, [isAuthenticated, user]);
+
+  // Clear navigation history when the user's role changes to avoid crossing states
+  useEffect(() => {
+    if (user) {
+      setNavigationHistory([]);
+      sessionStorage.removeItem('pm_nav_history');
+      setActiveView('default');
+    }
+  }, [user?.role]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-semibold tracking-wide text-slate-300">Initializing PantryMaster ERP...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <MobileOtpLogin />;
+  }
+
+  // Handle Cart updates
+  const handleAddToCart = (product: Product, batch: ProductBatch, orderType: 'PANTRY' | 'QUICK') => {
+    if (orderType === 'PANTRY') {
+      setPantryCart((prev) => {
+        const existingIdx = prev.findIndex(
+          (item) => item.product.id === product.id && item.batch.id === batch.id
+        );
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantity: Math.min(
+              updated[existingIdx].quantity + 1,
+              batch.availableQuantity
+            ),
+          };
+          return updated;
+        }
+        return [...prev, { product, batch, quantity: 1 }];
+      });
+    } else {
+      setQuickCart((prev) => {
+        const existingIdx = prev.findIndex(
+          (item) => item.product.id === product.id && item.batch.id === batch.id
+        );
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantity: Math.min(
+              updated[existingIdx].quantity + 1,
+              batch.availableQuantity
+            ),
+          };
+          return updated;
+        }
+        return [...prev, { product, batch, quantity: 1 }];
+      });
+    }
+  };
+
+  const handleUpdatePantryQuantity = (productId: string, batchId: string, delta: number) => {
+    setPantryCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.product.id === productId && item.batch.id === batchId) {
+            const newQty = item.quantity + delta;
+            return newQty > 0 ? { ...item, quantity: Math.min(newQty, item.batch.availableQuantity) } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as CartItem[]
+    );
+  };
+
+  const handleRemovePantryItem = (productId: string, batchId: string) => {
+    setPantryCart((prev) =>
+      prev.filter((i) => !(i.product.id === productId && i.batch.id === batchId))
+    );
+  };
+
+  const handleUpdateQuickQuantity = (productId: string, batchId: string, delta: number) => {
+    setQuickCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.product.id === productId && item.batch.id === batchId) {
+            const newQty = item.quantity + delta;
+            return newQty > 0 ? { ...item, quantity: Math.min(newQty, item.batch.availableQuantity) } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as CartItem[]
+    );
+  };
+
+  const handleRemoveQuickItem = (productId: string, batchId: string) => {
+    setQuickCart((prev) =>
+      prev.filter((i) => !(i.product.id === productId && i.batch.id === batchId))
+    );
+  };
+
+  const navigateToAdminView = (view: string, subTab?: string, filter?: string, isBackOperation = false) => {
+    const prevView = activeView;
+    const prevSubTab = adminSubTab;
+    const prevFilter = adminFilter;
+
+    // Determine default view if needed
+    const realPrevView = prevView === 'default' ? (
+      user.role === 'ADMIN' ? 'admin-dashboard' :
+      user.role === 'CUSTOMER' ? 'customer-store' :
+      user.role === 'DELIVERY_BOY' ? 'delivery-portal' :
+      user.role === 'AUDITOR' ? 'auditor-portal' : 'admin-dashboard'
+    ) : prevView;
+
+    // Only push to history if it's a new navigation and different view
+    if (!isBackOperation && realPrevView !== view) {
+      setNavigationHistory((prev) => {
+        const updated = [...prev, { view: realPrevView, subTab: prevSubTab, filter: prevFilter }];
+        sessionStorage.setItem('pm_nav_history', JSON.stringify(updated));
+        return updated;
+      });
+    }
+
+    setAdminSubTab(subTab);
+    setAdminFilter(filter);
+    setActiveView(view);
+
+    if (user?.role) {
+      localStorage.setItem(`pm_active_view_${user.role}`, view);
+    }
+    if (subTab) {
+      localStorage.setItem(`pm_admin_sub_tab`, subTab);
+    } else {
+      localStorage.removeItem(`pm_admin_sub_tab`);
+    }
+    if (filter) {
+      localStorage.setItem(`pm_admin_filter`, filter);
+    } else {
+      localStorage.removeItem(`pm_admin_filter`);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (navigationHistory.length === 0) return;
+    
+    const prevNavs = [...navigationHistory];
+    const lastNav = prevNavs.pop();
+    setNavigationHistory(prevNavs);
+    sessionStorage.setItem('pm_nav_history', JSON.stringify(prevNavs));
+
+    if (lastNav) {
+      navigateToAdminView(lastNav.view, lastNav.subTab, lastNav.filter, true);
+    }
+  };
+
+  // Determine current active view based on role default
+  const getCurrentView = () => {
+    if (activeView !== 'default') return activeView;
+    if (user.role === 'ADMIN') return 'admin-dashboard';
+    if (user.role === 'CUSTOMER') return 'customer-store';
+    if (user.role === 'DELIVERY_BOY') return 'delivery-portal';
+    if (user.role === 'AUDITOR') return 'auditor-portal';
+    return 'admin-dashboard';
+  };
+
+  const currentView = getCurrentView();
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-emerald-500 selection:text-white overflow-x-hidden">
+      {/* Top Navigation */}
+      <Navbar
+        activeView={currentView}
+        onNavigate={(view, subTab, filter) => {
+          navigateToAdminView(view, subTab, filter);
+        }}
+        pantryCartCount={pantryCart.reduce((sum, i) => sum + i.quantity, 0)}
+        quickCartCount={quickCart.reduce((sum, i) => sum + i.quantity, 0)}
+        onOpenPantryCart={() => setIsPantryCartOpen(true)}
+        onOpenQuickCart={() => setIsQuickCartOpen(true)}
+        onOpenProfile={(tab) => {
+          setProfileDefaultTab(tab || 'profile');
+          setIsProfileOpen(true);
+        }}
+      />
+
+      {/* Global Navigation Back Button Bar */}
+      {navigationHistory.length > 0 && (
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs sticky top-0 z-40">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold transition shadow-3xs border border-emerald-200/60 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Go Back (पीछे जाएं)</span>
+          </button>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-md">
+            Active: {currentView.replace('admin-', '').replace('customer-', '').replace('-', ' ')}
+          </span>
+        </div>
+      )}
+
+      {/* Main Content Area - Full width and height on PC/laptops */}
+      <main className={`flex-1 w-full max-w-7xl mx-auto p-3 sm:p-5 lg:p-6 xl:p-8 ${user.role === 'CUSTOMER' ? 'pb-20 md:pb-8' : ''}`}>
+        {/* ADMIN VIEWS */}
+        {user.role === 'ADMIN' && (
+          <>
+            {currentView === 'admin-dashboard' && (
+              <AdminDashboard onNavigate={navigateToAdminView} />
+            )}
+            {currentView === 'admin-inventory' && (
+              <BatchInventoryManagement initialFilter={adminFilter} />
+            )}
+            {currentView === 'admin-stockin' && (
+              <PurchaseStockIn onStockInSuccess={() => setActiveView('admin-inventory')} />
+            )}
+            {currentView === 'admin-catalog' && <ProductCatalog />}
+            {currentView === 'admin-customers' && (
+              <CustomerManagement onConductAudit={() => setActiveView('admin-reports')} />
+            )}
+            {currentView === 'admin-orders' && (
+              <OrdersAndDeliveryAdmin initialTab={adminSubTab} initialFilter={adminFilter} />
+            )}
+            {currentView === 'admin-auditor-returns' && (
+              <AuditorReturnOrdersAdmin initialStatusFilter={adminFilter} />
+            )}
+            {currentView === 'admin-pantry-payments' && (
+              <PantryPayPaymentsAdmin
+                initialFilter={adminFilter}
+                onNavigateCustomer={() => navigateToAdminView('admin-customers')}
+              />
+            )}
+            {currentView === 'admin-delivery-staff' && (
+              <DeliveryAndAuditorManagement initialTab={adminSubTab} />
+            )}
+            {currentView === 'admin-reports' && (
+              <ReportsAndLogsAdmin initialReport={adminSubTab} />
+            )}
+            {currentView === 'admin-notifications' && (
+              <AdminNotificationCenter onNavigate={navigateToAdminView} />
+            )}
+          </>
+        )}
+
+        {/* CUSTOMER VIEWS */}
+        {user.role === 'CUSTOMER' && (
+          <>
+            {currentView === 'customer-store' && (
+              <CustomerStorefront
+                onAddToCart={handleAddToCart}
+                quickCartItemsCount={quickCart.length}
+                pantryCartItemsCount={pantryCart.length}
+              />
+            )}
+            {currentView === 'customer-pantry' && (
+              hasPantryAccess(customer) ? (
+                <PantryCardPortal />
+              ) : (
+                <CustomerStorefront
+                  onAddToCart={handleAddToCart}
+                  quickCartItemsCount={quickCart.length}
+                  pantryCartItemsCount={pantryCart.length}
+                />
+              )
+            )}
+            {currentView === 'customer-orders' && <CustomerOrdersHistory />}
+          </>
+        )}
+
+        {/* DELIVERY BOY VIEW */}
+        {user.role === 'DELIVERY_BOY' && <DeliveryBoyPortal />}
+
+        {/* AUDITOR VIEW */}
+        {user.role === 'AUDITOR' && <AuditorPortal />}
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-slate-200 py-3 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
+        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-800">PantryMaster ERP</span>
+            <span>• Batch Tracking &amp; Dual-Track Delivery Platform</span>
+          </div>
+          <div className="text-slate-400 text-[11px]">
+            Active Role: <strong className="text-slate-700">{user.role}</strong> ({user.name})
+          </div>
+        </div>
+      </footer>
+
+      {/* Cart Modals for Customers */}
+      {user.role === 'CUSTOMER' && (
+        <>
+          <PantryCartModal
+            isOpen={isPantryCartOpen}
+            onClose={() => setIsPantryCartOpen(false)}
+            items={pantryCart}
+            onUpdateQuantity={handleUpdatePantryQuantity}
+            onRemoveItem={handleRemovePantryItem}
+            onClearCart={() => setPantryCart([])}
+            onOrderSuccess={() => setActiveView('customer-pantry')}
+          />
+
+          <QuickCartModal
+            isOpen={isQuickCartOpen}
+            onClose={() => setIsQuickCartOpen(false)}
+            items={quickCart}
+            onUpdateQuantity={handleUpdateQuickQuantity}
+            onRemoveItem={handleRemoveQuickItem}
+            onClearCart={() => setQuickCart([])}
+            onOrderSuccess={() => setActiveView('customer-orders')}
+          />
+
+          <CustomerProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            defaultTab={profileDefaultTab}
+            onNavigateToOrders={() => {
+              setIsProfileOpen(false);
+              setActiveView('customer-orders');
+            }}
+          />
+
+          <CustomerBottomNav
+            activeView={currentView}
+            onNavigate={(view) => setActiveView(view)}
+            pantryCartCount={pantryCart.reduce((sum, i) => sum + i.quantity, 0)}
+            quickCartCount={quickCart.reduce((sum, i) => sum + i.quantity, 0)}
+            onOpenPantryCart={() => setIsPantryCartOpen(true)}
+            onOpenQuickCart={() => setIsQuickCartOpen(true)}
+            onOpenProfile={() => {
+              setProfileDefaultTab('profile');
+              setIsProfileOpen(true);
+            }}
+            customer={customer}
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[App Runtime Error]', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white">
+          <div className="max-w-md w-full bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-bold">PantryMaster ERP Loaded</h2>
+            <p className="text-sm text-slate-300">
+              An unexpected display issue occurred. Click below to refresh your dashboard session.
+            </p>
+            <button
+              onClick={() => {
+                localStorage.removeItem('pm_token');
+                window.location.reload();
+              }}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg transition-colors"
+            >
+              Reload Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
+}
