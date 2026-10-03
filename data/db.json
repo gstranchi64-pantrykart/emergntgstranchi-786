@@ -598,7 +598,11 @@
           "weightSize": "1kg",
           "batchNumber": "RICE-99",
           "productName": "India Gate Basmati Rice Premium Feast Rozzana 1kg",
-          "manufacturingDate": "2026-07-05"
+          "manufacturingDate": "2026-07-05",
+          "assignmentStatus": "LOCKED",
+          "orderedQuantity": 1,
+          "assignedQuantity": 1,
+          "shopkeeperName": "Gupta Agro Suppliers Pvt Ltd"
         },
         {
           "mrp": 195,
@@ -613,7 +617,11 @@
           "weightSize": "1kg",
           "batchNumber": "DAL-44",
           "productName": "Tata Sampann Unpolished Toor Dal Arhar Dal 1kg",
-          "manufacturingDate": "2026-09-03"
+          "manufacturingDate": "2026-09-03",
+          "assignmentStatus": "LOCKED",
+          "orderedQuantity": 1,
+          "assignedQuantity": 1,
+          "shopkeeperName": "Jharkhand Grain Distributors"
         }
       ],
       "subtotal": 290,
@@ -634,7 +642,9 @@
       "pantryDebitAmount": 0,
       "assignedDeliveryBoyId": "DEL-002",
       "assignedDeliveryBoyName": "Vikram Singh",
-      "assignedDeliveryBoyMobile": "9988776656"
+      "assignedDeliveryBoyMobile": "9988776656",
+      "assignmentStatus": "ASSIGNED_AND_LOCKED",
+      "packingStatus": "PACKED"
     }
   ],
   "batches": [
@@ -1660,6 +1670,25 @@
     "auditRequireCustomerConfirmation": true
   },
   "auditLogs": [
+    {
+      "id": "LOG-112099-37",
+      "who": "System Administrator",
+      "userMobile": "",
+      "role": "ADMIN",
+      "action": "RECHARGE_CUSTOMER_WALLET",
+      "entity": "WALLET",
+      "entityId": "CUS-000001",
+      "oldValue": "₹438",
+      "newValue": "₹2552 (+₹2114)",
+      "reason": "Customer Advance Deposit / Prepaid Balance",
+      "details": "₹2552 (+₹2114)",
+      "date": "2026-10-03",
+      "time": "10:41:52 AM",
+      "timestamp": "03/10/2026 10:41:52 AM",
+      "userName": "System Administrator",
+      "userRole": "ADMIN",
+      "entityType": "WALLET"
+    },
     {
       "id": "LOG-851253-9",
       "who": "Ramesh Kumar (Parent)",
@@ -2946,7 +2975,7 @@
       "updatedAt": "2026-10-03",
       "pantryLimit": 10000,
       "relationInfo": "Self / Head of Family",
-      "walletBalance": 438,
+      "walletBalance": 2552,
       "alternateMobile": "9835000000",
       "usedPantryLimit": 2697,
       "auditMissingHold": 562,
@@ -2972,7 +3001,7 @@
       "updatedAt": "2026-10-01",
       "pantryLimit": 10000,
       "relationInfo": "Spouse",
-      "walletBalance": 590,
+      "walletBalance": 438,
       "isPantryAllowed": true,
       "usedPantryLimit": 2697,
       "childCustomerIds": [],
@@ -2994,7 +3023,7 @@
       "updatedAt": "2026-09-23",
       "pantryLimit": 10000,
       "relationInfo": "Son",
-      "walletBalance": 590,
+      "walletBalance": 438,
       "isPantryAllowed": true,
       "usedPantryLimit": 2697,
       "childCustomerIds": [],
@@ -4846,7 +4875,7 @@
       "replacementsInitiatedCount": 0
     }
   ],
-  "lastUpdatedAt": "2026-10-03T09:47:31.253Z",
+  "lastUpdatedAt": "2026-10-03T10:41:52.106Z",
   "pantryPayments": [
     {
       "id": "PPAY-717729",
@@ -5486,6 +5515,22 @@
     }
   ],
   "walletTransactions": [
+    {
+      "id": "WLT-112099",
+      "customerId": "CUS-000001",
+      "transactionType": "ADMIN_RECHARGE",
+      "amount": 2114,
+      "previousBalance": 438,
+      "newBalance": 2552,
+      "referenceId": "RCG-112099",
+      "userId": "USR-ADMIN-01",
+      "role": "ADMIN",
+      "date": "2026-10-03",
+      "time": "10:41:52 AM",
+      "timestamp": "2026-10-03T10:41:52.099Z",
+      "reason": "Customer Advance Deposit / Prepaid Balance",
+      "status": "SUCCESS"
+    },
     {
       "id": "WLT-851251",
       "date": "2026-10-03",

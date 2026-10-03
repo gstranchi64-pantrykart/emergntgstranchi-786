@@ -149,10 +149,10 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
     setErrorMsg(null);
     setPaymentSuccessRecords([]);
     addItemToScanned({
-      productId: 'WALLET-RECHARGE-100',
-      productName: 'Customer Wallet Recharge (Fixed ₹100)',
-      barcode: 'WALLET-100',
-      price: 100,
+      productId: 'WALLET-RECHARGE-1000',
+      productName: 'Customer Wallet Recharge (Fixed ₹1000)',
+      barcode: 'WALLET-1000',
+      price: 1000,
       isWalletRecharge: true,
       image: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=300&q=80',
     });
@@ -338,7 +338,7 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
       const results: PantryPayment[] = [];
 
       for (const item of scannedItems) {
-        const isRecharge = item.isWalletRecharge || item.productId === 'WALLET-RECHARGE-100' || item.barcode === 'WALLET-100';
+        const isRecharge = item.isWalletRecharge || item.productId === 'WALLET-RECHARGE-1000' || item.barcode === 'WALLET-1000' || item.productId === 'WALLET-RECHARGE-100' || item.barcode === 'WALLET-100';
         const record = await api.createPantryPayment({
           customerId: customer.id,
           productId: item.productId,
@@ -851,7 +851,7 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
                         className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 shadow-xs shrink-0 font-sans"
                       >
                         <Wallet className="w-3 h-3 text-emerald-200" />
-                        <span>Fixed ₹100 Recharge Voucher</span>
+                        <span>Fixed ₹1000 Recharge Voucher</span>
                       </button>
 
                       {/* Products from available pantry stock */}
@@ -909,7 +909,7 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
 
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                       {scannedItems.map((item) => {
-                        const isRecharge = item.isWalletRecharge || item.productId === 'WALLET-RECHARGE-100' || item.barcode === 'WALLET-100';
+                        const isRecharge = item.isWalletRecharge || item.productId === 'WALLET-RECHARGE-1000' || item.barcode === 'WALLET-1000' || item.productId === 'WALLET-RECHARGE-100' || item.barcode === 'WALLET-100';
                         return (
                           <div
                             key={`${item.productId}-${item.barcode}`}
@@ -1081,7 +1081,7 @@ export const PantryPayScannerUI: React.FC<PantryPayScannerUIProps> = ({
             ) : (
               <div className="space-y-3 font-sans">
                 {history.map((rec) => {
-                  const isRecharge = rec.isWalletRecharge || rec.paymentType === 'WALLET_RECHARGE' || rec.productId === 'WALLET-RECHARGE-100' || rec.barcode === 'WALLET-100';
+                  const isRecharge = rec.isWalletRecharge || rec.paymentType === 'WALLET_RECHARGE' || rec.productId === 'WALLET-RECHARGE-1000' || rec.barcode === 'WALLET-1000' || rec.productId === 'WALLET-RECHARGE-100' || rec.barcode === 'WALLET-100';
                   return (
                     <div
                       key={rec.id}
