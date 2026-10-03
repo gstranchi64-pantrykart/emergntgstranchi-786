@@ -1254,7 +1254,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/audits/:id/customer-confirm', (req: Request, res: Response) => {
+  const handleCustomerConfirmAudit = (req: Request, res: Response) => {
     try {
       const user = getActingUser(req);
       const audit = BusinessService.confirmAuditRequestByCustomer(req.params.id, user);
@@ -1262,7 +1262,13 @@ async function startServer() {
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
     }
-  });
+  };
+  app.post('/api/audits/:id/customer-confirm', handleCustomerConfirmAudit);
+  app.post('/api/audits/:id/confirm-permission', handleCustomerConfirmAudit);
+  app.post('/api/auditor-checks/:id/customer-confirm', handleCustomerConfirmAudit);
+  app.post('/api/auditor-checks/:id/confirm-permission', handleCustomerConfirmAudit);
+  app.post('/api/audits/:id/approve', handleCustomerConfirmAudit);
+  app.post('/api/auditor-checks/:id/approve', handleCustomerConfirmAudit);
 
   app.post('/api/audits/:id/start', (req: Request, res: Response) => {
     try {
@@ -1657,9 +1663,16 @@ async function startServer() {
   // reach this same Express API from the public preview URL.
   const API_INGRESS_PORT = 8001;
   if (PORT !== API_INGRESS_PORT) {
-    app.listen(API_INGRESS_PORT, '0.0.0.0', () => {
-      console.log(`API also listening on http://0.0.0.0:${API_INGRESS_PORT} for ingress /api routing`);
-    });
+    try {
+      const ingressServer = app.listen(API_INGRESS_PORT, '0.0.0.0', () => {
+        console.log(`API also listening on http://0.0.0.0:${API_INGRESS_PORT} for ingress /api routing`);
+      });
+      ingressServer.on('error', (err: any) => {
+        console.warn(`[Ingress Notice] Port ${API_INGRESS_PORT} listener skipped: ${err.message}`);
+      });
+    } catch (e: any) {
+      console.warn(`[Ingress Notice] Could not start port ${API_INGRESS_PORT} listener:`, e.message);
+    }
   }
 }
 

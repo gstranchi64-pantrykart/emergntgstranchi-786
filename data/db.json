@@ -598,11 +598,11 @@
           "weightSize": "1kg",
           "batchNumber": "RICE-99",
           "productName": "India Gate Basmati Rice Premium Feast Rozzana 1kg",
-          "manufacturingDate": "2026-07-05",
-          "assignmentStatus": "LOCKED",
+          "shopkeeperName": "Gupta Agro Suppliers Pvt Ltd",
           "orderedQuantity": 1,
           "assignedQuantity": 1,
-          "shopkeeperName": "Gupta Agro Suppliers Pvt Ltd"
+          "assignmentStatus": "LOCKED",
+          "manufacturingDate": "2026-07-05"
         },
         {
           "mrp": 195,
@@ -617,11 +617,11 @@
           "weightSize": "1kg",
           "batchNumber": "DAL-44",
           "productName": "Tata Sampann Unpolished Toor Dal Arhar Dal 1kg",
-          "manufacturingDate": "2026-09-03",
-          "assignmentStatus": "LOCKED",
+          "shopkeeperName": "Jharkhand Grain Distributors",
           "orderedQuantity": 1,
           "assignedQuantity": 1,
-          "shopkeeperName": "Jharkhand Grain Distributors"
+          "assignmentStatus": "LOCKED",
+          "manufacturingDate": "2026-09-03"
         }
       ],
       "subtotal": 290,
@@ -635,16 +635,16 @@
       "orderStatus": "OUT_FOR_DELIVERY",
       "totalAmount": 320,
       "customerName": "Priya Sharma",
+      "packingStatus": "PACKED",
       "paymentStatus": "COD_PENDING",
       "customerMobile": "9835012345",
       "deliveryAddress": "House No 12, Harmu Housing Colony, Harmu, Ranchi - 834002",
+      "assignmentStatus": "ASSIGNED_AND_LOCKED",
       "outForDeliveryAt": "2026-10-03",
       "pantryDebitAmount": 0,
       "assignedDeliveryBoyId": "DEL-002",
       "assignedDeliveryBoyName": "Vikram Singh",
-      "assignedDeliveryBoyMobile": "9988776656",
-      "assignmentStatus": "ASSIGNED_AND_LOCKED",
-      "packingStatus": "PACKED"
+      "assignedDeliveryBoyMobile": "9988776656"
     }
   ],
   "batches": [
@@ -1673,21 +1673,21 @@
     {
       "id": "LOG-112099-37",
       "who": "System Administrator",
-      "userMobile": "",
+      "date": "2026-10-03",
       "role": "ADMIN",
+      "time": "10:41:52 AM",
       "action": "RECHARGE_CUSTOMER_WALLET",
       "entity": "WALLET",
-      "entityId": "CUS-000001",
-      "oldValue": "₹438",
-      "newValue": "₹2552 (+₹2114)",
       "reason": "Customer Advance Deposit / Prepaid Balance",
       "details": "₹2552 (+₹2114)",
-      "date": "2026-10-03",
-      "time": "10:41:52 AM",
-      "timestamp": "03/10/2026 10:41:52 AM",
+      "entityId": "CUS-000001",
+      "newValue": "₹2552 (+₹2114)",
+      "oldValue": "₹438",
       "userName": "System Administrator",
       "userRole": "ADMIN",
-      "entityType": "WALLET"
+      "timestamp": "03/10/2026 10:41:52 AM",
+      "entityType": "WALLET",
+      "userMobile": ""
     },
     {
       "id": "LOG-851253-9",
@@ -5517,19 +5517,19 @@
   "walletTransactions": [
     {
       "id": "WLT-112099",
-      "customerId": "CUS-000001",
-      "transactionType": "ADMIN_RECHARGE",
+      "date": "2026-10-03",
+      "role": "ADMIN",
+      "time": "10:41:52 AM",
       "amount": 2114,
-      "previousBalance": 438,
+      "reason": "Customer Advance Deposit / Prepaid Balance",
+      "status": "SUCCESS",
+      "userId": "USR-ADMIN-01",
+      "timestamp": "2026-10-03T10:41:52.099Z",
+      "customerId": "CUS-000001",
       "newBalance": 2552,
       "referenceId": "RCG-112099",
-      "userId": "USR-ADMIN-01",
-      "role": "ADMIN",
-      "date": "2026-10-03",
-      "time": "10:41:52 AM",
-      "timestamp": "2026-10-03T10:41:52.099Z",
-      "reason": "Customer Advance Deposit / Prepaid Balance",
-      "status": "SUCCESS"
+      "previousBalance": 438,
+      "transactionType": "ADMIN_RECHARGE"
     },
     {
       "id": "WLT-851251",

@@ -2354,10 +2354,28 @@ class DatabaseStore {
       console.log('[Store] Synchronizing in-memory state from Supabase Cloud snapshot...');
       const res = await supabaseService.syncPull();
       if (res.success && res.data) {
-        this.db = res.data;
+        const cloudDb: DatabaseSchema = res.data;
+
+        // Defensive protection: Never revert CUSTOMER_CONFIRMED audits back to PENDING on snapshot pull
+        if (this.db && Array.isArray(this.db.auditorChecks) && Array.isArray(cloudDb.auditorChecks)) {
+          for (const localAudit of this.db.auditorChecks) {
+            const cloudAudit = cloudDb.auditorChecks.find((a: any) => a.id === localAudit.id);
+            if (cloudAudit) {
+              if (localAudit.status === 'CUSTOMER_CONFIRMED' && cloudAudit.status !== 'CUSTOMER_CONFIRMED') {
+                cloudAudit.status = 'CUSTOMER_CONFIRMED';
+                cloudAudit.isPermissionGranted = true;
+                cloudAudit.customerConfirmedAt = localAudit.customerConfirmedAt || new Date().toISOString();
+              }
+            } else {
+              cloudDb.auditorChecks.push(localAudit);
+            }
+          }
+        }
+
+        this.db = cloudDb;
         this.migrateDb();
         this.saveSyncDiskOnly();
-        console.log('[Store] Hydrated state from Supabase successfully.');
+        console.log('[Store] Hydrated state from Supabase successfully with status protection.');
         return true;
       } else {
         console.log('[Store] No cloud snapshot found on Supabase. Using local disk/in-memory state.');
