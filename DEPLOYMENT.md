@@ -7,6 +7,19 @@ This app is a single-process fullstack application:
 
 ---
 
+## ⚙️ Node.js Version: Use Node 22 (Important for Supabase)
+
+This repo already pins **Node 22** via `.nvmrc` and `.node-version`, so most platforms auto-select it:
+- **Render**: Settings → Build & Deploy → **Node Version** → set `22` (or it auto-reads `.node-version`).
+- **Railway**: auto-reads `.nvmrc` → will use Node 22. No action needed.
+- **Vercel**: Project Settings → General → **Node.js Version** → select `22.x`.
+
+Why: `@supabase/supabase-js` works best on Node 22+ (native WebSocket). On Node 20 the app still works because we ship a `ws` transport fallback, but Node 22 is recommended.
+
+`package.json` also has `"engines": { "node": ">=20.0.0" }` so Node 20 won't hard-fail as a fallback.
+
+---
+
 ## 🚀 Option 1: Deploy on Render.com (Recommended — 100% Free / Easy)
 
 Render runs both the frontend and backend together as a single Node.js Web Service.
