@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { SupabaseStatusInfo, SupabaseSyncResult } from '../src/types';
 
 // Helper to perform fetch with strict timeout to prevent hangs
@@ -61,6 +62,11 @@ class SupabaseService {
           },
           global: {
             fetch: (url, options) => fetchWithTimeout(url, options, 5000),
+          },
+          // Node 20 lacks native WebSocket (added in Node 22) — provide `ws` so
+          // the realtime client constructor does not throw and kill the client.
+          realtime: {
+            transport: WebSocket as any,
           },
         });
       }

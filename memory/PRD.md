@@ -56,6 +56,10 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Security: removed ALL hardcoded Supabase credential fallbacks (incl. service-role key) from server/supabase.ts + src/lib/supabaseClient.ts → now env-only with crash-safe guards. Verified app still loads + Supabase creds load from env.
 - Not-real-blockers (left as-is): preview supervisor conf (read-only, not in build context) and .gitignore blocking .env (intentional — keeps secrets out of public GitHub; deployer reads from live mount).
 
+## Preview outage fix (2026-10-03)
+- CAUSE 1: Environment restart left a stray `node server.js` process squatting on ports 3000+8001, and default backend/frontend supervisor programs revived → new app instance crashed EADDRINUSE. Fix: killed stray pid, stopped default programs, restarted pantrykart.
+- CAUSE 2 (deeper, pre-existing): Supabase client NEVER initialized — supabase-js needs native WebSocket (Node 22+), env is Node 20 → createClient threw → cloud sync silently failing all along (also why test data vanished on restarts). FIX: pass `ws` package as realtime transport in server/supabase.ts initClient (+ @types/ws, ws added to package.json deps). Now `connected:true`, cloud sync SUCCESS, state hydrates from Supabase.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway
