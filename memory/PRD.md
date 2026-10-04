@@ -91,6 +91,12 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Naya route: GET /api/health (server.ts).
 - Measured: page load → login form 0.5s; login → dashboard shell 1.0s; real stats 1.1s after login (pehle zeros → sync ke baad populate); customer portal full catalog instant. Console me "Failed to fetch" PostgREST storm = 0 warnings.
 
+## Auditor Active Stock — Physical Check Checkbox Tracker (2026-10-04) — VERIFIED (UI screenshots)
+- Auditor Portal → Active Stock tab me har item card par "Check / Checked" toggle button (data-testid auditor-check-item-{id}). Tick karne par card emerald highlight + "VERIFY DONE" badge; untick se wapas pending.
+- Upar "Physical Check Progress" strip (auditor-check-progress): live progress bar + "✓ Checked: X" (auditor-checked-count) + "Pending: Y" (auditor-pending-count) + percentage.
+- UI-only aid (user requirement: koi business logic impact nahi) — itemStatuses/bill/settlement untouched. State sirf localStorage (pm_audit_checklist) me; audit submit hone par auto-reset. Refresh par persist.
+- Verified: 5 active items, tick→1/4→2/3 (40% bar), untick→1/4, reload persistence ✓.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway
