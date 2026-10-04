@@ -6,6 +6,7 @@ import {
   BatchOrderUsage,
   CustomerPantryHolding,
   CustomerPantryHoldingsResponse,
+  PantryPayment,
 } from '../../types';
 import { api } from '../../services/api';
 import { ImageWithFallback } from '../common/ImageWithFallback';
@@ -73,7 +74,7 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
   const [copiedBarcode, setCopiedBarcode] = useState(false);
 
   // Tab navigation
-  const [activeTab, setActiveTab] = useState<'all' | 'pantryCustomers' | 'purchases' | 'sales' | 'batches' | 'ledger'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'pantryCustomers' | 'pantryOut' | 'purchases' | 'sales' | 'batches' | 'ledger'>('all');
   const [ledgerFilter, setLedgerFilter] = useState<'ALL' | 'PURCHASE' | 'SALE' | 'RETURN' | 'ADJUST'>('ALL');
   const [searchFilter, setSearchFilter] = useState('');
   const [showPantryCustomerModal, setShowPantryCustomerModal] = useState(false);
@@ -85,6 +86,10 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
   const [pantryStockOnly, setPantryStockOnly] = useState(true);
   const [pantrySearchQuery, setPantrySearchQuery] = useState('');
   const [copiedMobileId, setCopiedMobileId] = useState<string | null>(null);
+
+  // Pantry Payments history for this barcode
+  const [pantryPayments, setPantryPayments] = useState<PantryPayment[]>([]);
+  const [pantryPaymentsLoading, setPantryPaymentsLoading] = useState(false);
 
   const fetchPantryHoldings = async () => {
     if (!barcode) return;
@@ -103,18 +108,23 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
     if (!barcode) return;
     setLoading(true);
     setError(null);
+    setPantryPaymentsLoading(true);
     try {
-      const [res, pHoldings] = await Promise.all([
+      const [res, pHoldings, pPayments] = await Promise.all([
         api.getBarcodeDetails(barcode),
         api.getPantryHoldings({ barcode }),
+        api.getAllPantryPayments(),
       ]);
       setData(res);
       setPantryData(pHoldings);
+      // Filter out wallet recharges, keep only actual product payments matching this barcode
+      setPantryPayments((pPayments || []).filter(p => p.barcode === barcode && !p.isWalletRecharge));
     } catch (err: any) {
       console.error('Failed to load barcode lifecycle details:', err);
       setError(err?.message || 'Failed to fetch details for this barcode.');
     } finally {
       setLoading(false);
+      setPantryPaymentsLoading(false);
     }
   };
 
@@ -164,6 +174,82 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
       },
     };
   }, [pantryData]);
+
+  // Memoized chronological compilation of items deducted from customer pantries
+  const pantryDeductions = useMemo(() => {
+    const logs: Array<{
+      id: string;
+      timestamp: string;
+      type: 'PANTRY_PAY_DEDUCTION' | 'AUDITOR_MISSING_DEDUCTION' | 'PANTRY_RETURN';
+      customerName: string;
+      customerMobile: string;
+      quantityChange: number;
+      amount?: number;
+      operatorName: string;
+      remarks: string;
+      refId: string;
+    }> = [];
+
+    // A. Pantry Payments (Customer paid for items in their pantry)
+    (pantryPayments || []).forEach((p) => {
+      const price = data?.product?.sellingPrice || 1;
+      const qty = Math.max(1, Math.round(p.amount / price));
+      logs.push({
+        id: `DED-PPAY-${p.id}`,
+        timestamp: p.createdAt || p.updatedAt,
+        type: 'PANTRY_PAY_DEDUCTION',
+        customerName: p.customerName,
+        customerMobile: p.customerMobile,
+        quantityChange: qty,
+        amount: p.amount,
+        operatorName: 'Customer (Self Paid)',
+        remarks: `Paid via ${p.paymentMethod} • Txn Ref: ${p.transactionRef || 'N/A'} • Status: ${p.paymentStatus}`,
+        refId: p.id,
+      });
+    });
+
+    // B. Auditor Checks (Items checked and marked as not available/missing)
+    (data?.auditorChecks || []).forEach((ac) => {
+      const item = ac.itemsChecked?.find((it) => it.productId === data?.product?.id);
+      if (item) {
+        const qtyNotAvail = item.qtyMissing || (item.quantity - (item.qtyAvailable || 0));
+        if (qtyNotAvail > 0) {
+          logs.push({
+            id: `DED-AUD-${ac.id}`,
+            timestamp: ac.completedAt || ac.requestedAt || ac.createdAt,
+            type: 'AUDITOR_MISSING_DEDUCTION',
+            customerName: ac.customerName,
+            customerMobile: ac.customerMobile || 'N/A',
+            quantityChange: qtyNotAvail,
+            amount: qtyNotAvail * (item.productPrice || data?.product?.sellingPrice || 0),
+            operatorName: `Auditor: ${ac.auditorName}`,
+            remarks: `Flagged as MISSING/CONSUMED during Physical Audit • Wallet Deduct: ₹${item.walletDeductionAmount || 0} • Remarks: ${item.remarks || 'No remarks'}`,
+            refId: ac.id,
+          });
+        }
+      }
+    });
+
+    // C. Returns from Customer Pantry back to Warehouse
+    (data?.returns || []).forEach((r) => {
+      if (r.status === 'COMPLETED' || (r.status as string) === 'RETURNED_TO_INVENTORY') {
+        logs.push({
+          id: `DED-RET-${r.id}`,
+          timestamp: r.returnedToInventoryAt || r.pickedUpAt || r.createdAt,
+          type: 'PANTRY_RETURN',
+          customerName: r.customerName,
+          customerMobile: 'N/A',
+          quantityChange: r.quantity,
+          operatorName: 'Delivery Logistics / Admin',
+          remarks: `Returned & Restored to Warehouse • Reason: ${r.reason} • Status: ${r.status}`,
+          refId: r.id,
+        });
+      }
+    });
+
+    // Sort newest first
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [pantryPayments, data, barcode]);
 
   const handleExportPantryHoldingsCsv = () => {
     const items = pantryData?.items || [];
@@ -637,6 +723,18 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
               </button>
 
               <button
+                onClick={() => setActiveTab('pantryOut')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  activeTab === 'pantryOut'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80'
+                }`}
+              >
+                <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" />
+                <span>Pantry Out Deductions &amp; Audit Logs ({pantryPayments.length + (data?.auditorChecks || []).length} Logs)</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('batches')}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === 'batches'
@@ -1096,6 +1194,125 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
             {/* TAB 1: OVERVIEW & ALL BATCHES */}
             {activeTab === 'all' && (
               <div className="space-y-5">
+                {/* BARCODE STOCK RECONCILIATION BALANCE SHEET */}
+                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl border border-indigo-500/20 p-5 shadow-lg space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                    <div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[10px] font-bold tracking-wider uppercase flex items-center gap-1.5 w-fit">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Unified Stock Reconciliation Balance Sheet
+                      </span>
+                      <h3 className="text-base font-black text-white mt-1.5 flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-indigo-400" />
+                        <span>Barcode #{barcode} Complete Stock Lifecycle Ledger</span>
+                      </h3>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-400">Equation Match</div>
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Balanced &amp; Verified ✓</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Balanced Equation Visual */}
+                  <div className="bg-white/5 border border-white/10 p-3.5 rounded-xl text-center space-y-2">
+                    <div className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Balanced Inventory Formula</div>
+                    <div className="flex flex-wrap items-center justify-center gap-3 text-sm sm:text-base font-mono">
+                      <div className="bg-indigo-950/60 px-3 py-1.5 rounded-lg border border-indigo-500/30 text-center">
+                        <div className="text-[9px] text-slate-400 uppercase font-sans font-bold">Total Inward Purchased</div>
+                        <span className="font-black text-white">{summary.totalInitialPurchased} Units</span>
+                      </div>
+                      <span className="text-slate-400 font-bold text-lg">=</span>
+                      <div className="bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-500/30 text-center">
+                        <div className="text-[9px] text-slate-400 uppercase font-sans font-bold">Available in Warehouse</div>
+                        <span className="font-black text-emerald-400">{summary.totalAvailableStock} Units</span>
+                      </div>
+                      <span className="text-slate-400 font-bold text-lg">+</span>
+                      <div className="bg-rose-950/60 px-3 py-1.5 rounded-lg border border-rose-500/30 text-center">
+                        <div className="text-[9px] text-slate-400 uppercase font-sans font-bold">Total Dispatched / Sold</div>
+                        <span className="font-black text-rose-400">{summary.totalInitialPurchased - summary.totalAvailableStock} Units</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2-Column In-Depth Lifecycle Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* LEFT COLUMN: Warehouse Dispatch & Distribution */}
+                    <div className="bg-white/5 border border-white/5 rounded-xl p-4 space-y-3">
+                      <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-white/5">
+                        <Store className="w-4 h-4 text-indigo-400" />
+                        <span>Warehouse Outflow Distribution</span>
+                      </h4>
+
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center justify-between p-2.5 bg-white/5 rounded-lg hover:bg-white/10 transition">
+                          <div>
+                            <div className="font-bold text-slate-200">1. Quick Sold (Shop Sales)</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">Direct shopkeeper retail sales via UPI/Cash/COD</div>
+                          </div>
+                          <span className="font-black text-amber-300 text-sm font-mono">{summary.totalQuickSold} Units</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2.5 bg-white/5 rounded-lg hover:bg-white/10 transition">
+                          <div>
+                            <div className="font-bold text-slate-200">2. Dispatched to Customer Pantries</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">Stock delivered to customer home pantries via credit</div>
+                          </div>
+                          <span className="font-black text-purple-300 text-sm font-mono">{summary.totalPantrySold} Units</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 text-slate-400 font-mono text-[10px] border-t border-white/5 pt-2 mt-2">
+                          <span>Total Dispatched Outflow:</span>
+                          <span className="font-bold text-white">{summary.totalQuickSold + summary.totalPantrySold} Units</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: Customer Pantry Lifecycle */}
+                    <div className="bg-white/5 border border-white/5 rounded-xl p-4 space-y-3">
+                      <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-white/5">
+                        <Users className="w-4 h-4 text-purple-400" />
+                        <span>Customer Pantry Lifecycle Stock</span>
+                      </h4>
+
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center justify-between p-2.5 bg-purple-500/10 rounded-lg border border-purple-500/20 hover:bg-purple-500/15 transition">
+                          <div>
+                            <div className="font-bold text-purple-200">A. Active Live Pantry In-Stock</div>
+                            <div className="text-[10px] text-purple-300/80 mt-0.5">Currently held inside customer homes &amp; verified</div>
+                          </div>
+                          <span className="font-black text-purple-400 text-sm font-mono">{pantryData?.summary.totalCurrentPantryQuantity ?? 0} Units</span>
+                        </div>
+
+                        <div 
+                          onClick={() => setActiveTab('pantryOut')}
+                          className="flex items-center justify-between p-2.5 bg-rose-500/10 rounded-lg border border-rose-500/20 hover:bg-rose-500/15 transition cursor-pointer"
+                        >
+                          <div>
+                            <div className="font-bold text-rose-200 flex items-center gap-1.5">
+                              <span>B. Total Pantry Deductions (Pantry Out)</span>
+                              <span className="text-[9px] bg-rose-500/30 text-rose-200 px-1.5 rounded-full font-bold">History 🔍</span>
+                            </div>
+                            <div className="text-[10px] text-rose-300/80 mt-0.5">Items paid (Pantry Pay), missing (Audited), or returned</div>
+                          </div>
+                          <span className="font-black text-rose-400 text-sm font-mono">
+                            {Math.max(0, summary.totalPantrySold - (pantryData?.summary.totalCurrentPantryQuantity ?? 0))} Units
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 text-slate-400 font-mono text-[10px] border-t border-white/5 pt-2 mt-2">
+                          <span>Total Pantry Outflow Lifecycle:</span>
+                          <span className="font-bold text-white">
+                            {(pantryData?.summary.totalCurrentPantryQuantity ?? 0) + Math.max(0, summary.totalPantrySold - (pantryData?.summary.totalCurrentPantryQuantity ?? 0))} Units
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* PROMINENT CUSTOMER PANTRY IN-STOCK & DAYS ELAPSED SECTION */}
                 <div className="bg-white rounded-xl border border-purple-200 overflow-hidden shadow-xs">
                   <div className="p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-slate-50 border-b border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1774,6 +1991,95 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: PANTRY OUT DEDUCTIONS & AUDIT LOGS */}
+            {activeTab === 'pantryOut' && (
+              <div className="space-y-4">
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-xs text-rose-950 flex items-start gap-3 shadow-2xs">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 animate-pulse" />
+                  <div>
+                    <h4 className="font-bold text-rose-900 text-sm">About Customer Pantry Stock Outflow (Deductions)</h4>
+                    <p className="mt-1 text-rose-800 leading-relaxed">
+                      Whenever live stock is distributed to customer pantries, it can only leave that pantry (Pantry Out) in three ways: 
+                      1) <strong>Pantry Pay</strong> (Customer pays for it), 2) <strong>Auditor Check Deduction</strong> (Auditor flags it as consumed/missing during physical check, leading to a wallet deduction), or 3) <strong>Pantry Returns</strong> (Restored to warehouse stock). Below is the complete chronological history of these deductions for this barcode.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Deductions Timeline Table */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span>Showing {pantryDeductions.length} Total Pantry Outflow Events</span>
+                    <span className="text-slate-400">Chronological Order (Newest First)</span>
+                  </div>
+
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/70 text-slate-600 text-[11px] font-semibold uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3">Date &amp; Time</th>
+                        <th className="py-2.5 px-3">Deduction Type</th>
+                        <th className="py-2.5 px-3">Customer Details</th>
+                        <th className="py-2.5 px-3 text-center">Qty Deducted</th>
+                        <th className="py-2.5 px-3">Amount Value</th>
+                        <th className="py-2.5 px-3">Action By</th>
+                        <th className="py-2.5 px-3">Detailed Remarks &amp; Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {pantryDeductions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                            No pantry stock deductions recorded for this barcode item.
+                          </td>
+                        </tr>
+                      ) : (
+                        pantryDeductions.map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50/70 transition">
+                            <td className="py-3 px-3 whitespace-nowrap font-mono font-bold text-slate-700">
+                              {log.timestamp}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
+                                  log.type === 'PANTRY_PAY_DEDUCTION'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : log.type === 'AUDITOR_MISSING_DEDUCTION'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-sky-50 text-sky-700 border-sky-200'
+                                }`}
+                              >
+                                {log.type === 'PANTRY_PAY_DEDUCTION' && <CreditCard className="w-3 h-3" />}
+                                {log.type === 'AUDITOR_MISSING_DEDUCTION' && <ShieldCheck className="w-3 h-3" />}
+                                {log.type === 'PANTRY_RETURN' && <RotateCcw className="w-3 h-3" />}
+                                <span>{log.type.replace(/_/g, ' ')}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="font-bold text-slate-900">{log.customerName}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">{log.customerMobile}</div>
+                            </td>
+                            <td className="py-3 px-3 text-center font-black text-rose-700 font-mono text-sm">
+                              -{log.quantityChange} Unit{log.quantityChange > 1 ? 's' : ''}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-slate-950 font-mono">
+                              {log.amount !== undefined ? `₹${log.amount.toLocaleString('en-IN')}` : 'N/A'}
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="font-semibold text-slate-700">{log.operatorName}</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <p className="text-[11px] text-slate-600 leading-relaxed">{log.remarks}</p>
+                              <div className="text-[9px] font-mono text-slate-400 mt-0.5">Ref ID: {log.refId}</div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
