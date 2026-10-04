@@ -142,7 +142,8 @@ export const AuditorPortal: React.FC = () => {
   const productsScrollRef = useRef<HTMLDivElement>(null);
   const [productSearchText, setProductSearchText] = useState('');
   const [productStatusFilter, setProductStatusFilter] = useState<'ALL' | 'DISCREPANCY' | 'MISSING' | 'DAMAGED' | 'OK'>('ALL');
-  const [showPendingOnly, setShowPendingOnly] = useState(false); // UI-only: sirf unticked (physically unchecked) items dikhaye
+  // UI-only checklist view filter: ALL / sirf pending (unticked) / sirf checked (ticked — review ke liye)
+  const [checkFilter, setCheckFilter] = useState<'ALL' | 'PENDING' | 'CHECKED'>('ALL');
   const [zoomedImage, setZoomedImage] = useState<{ src: string; title: string; barcode?: string; batchNumber?: string; mfgDate?: string; expDate?: string } | null>(null);
 
   const scrollProductsBy = (offset: number) => {
@@ -1736,8 +1737,12 @@ export const AuditorPortal: React.FC = () => {
                     }
 
                     const currentList = pantryItems.filter((i) => {
-                      // Pending-Only toggle: active tab par tick kiye hue items chhupa do
-                      if (showPendingOnly && pantrySubTab === 'active' && checkedItemIds.includes(i.id)) return false;
+                      // Checklist view filter: active tab par tick/untick ke hisaab se items chhupao
+                      if (pantrySubTab === 'active') {
+                        const isTicked = checkedItemIds.includes(i.id);
+                        if (checkFilter === 'PENDING' && isTicked) return false;
+                        if (checkFilter === 'CHECKED' && !isTicked) return false;
+                      }
                       const matchesTab = pantrySubTab === 'active' ? (i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID') : (i.quantity === 0 || i.status === 'CONSUMED_AND_PAID');
                       const q = (productSearchText || searchQuery).toLowerCase();
                       const matchesSearch = !q || (i.productName || '').toLowerCase().includes(q) || (i.barcode || '').includes(q) || (i.batchNumber || '').toLowerCase().includes(q);
@@ -1940,20 +1945,36 @@ export const AuditorPortal: React.FC = () => {
                                   Missing
                                 </button>
                                 {pantrySubTab === 'active' && (
-                                  <button
-                                    type="button"
-                                    data-testid="auditor-pending-only-toggle"
-                                    onClick={() => setShowPendingOnly((v) => !v)}
-                                    className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${showPendingOnly ? 'bg-cyan-700 text-white' : 'text-slate-500 hover:text-cyan-700'}`}
-                                    title="Sirf un items ko dikhayein jinhe abhi tick nahi kiya gaya — lambe stock me jaldi se pending products milane ke liye"
-                                  >
-                                    <Square className="w-3 h-3" />
-                                    Pending Check (
-                                    {pantryItems.filter(
-                                      (i) => (i.quantity || 0) > 0 && i.status !== 'CONSUMED_AND_PAID' && !checkedItemIds.includes(i.id)
-                                    ).length}
-                                    )
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      data-testid="auditor-pending-only-toggle"
+                                      onClick={() => setCheckFilter((v) => (v === 'PENDING' ? 'ALL' : 'PENDING'))}
+                                      className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${checkFilter === 'PENDING' ? 'bg-cyan-700 text-white' : 'text-slate-500 hover:text-cyan-700'}`}
+                                      title="Sirf un items ko dikhayein jinhe abhi tick nahi kiya gaya — lambe stock me jaldi se pending products milane ke liye"
+                                    >
+                                      <Square className="w-3 h-3" />
+                                      Pending Check (
+                                      {pantryItems.filter(
+                                        (i) => (i.quantity || 0) > 0 && i.status !== 'CONSUMED_AND_PAID' && !checkedItemIds.includes(i.id)
+                                      ).length}
+                                      )
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-testid="auditor-checked-only-toggle"
+                                      onClick={() => setCheckFilter((v) => (v === 'CHECKED' ? 'ALL' : 'CHECKED'))}
+                                      className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${checkFilter === 'CHECKED' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-emerald-700'}`}
+                                      title="Sirf tick kiye hue (physically checked) items dikhayein — verify kiya hua stock dubara review karne ke liye"
+                                    >
+                                      <CheckSquare className="w-3 h-3" />
+                                      Checked (
+                                      {pantryItems.filter(
+                                        (i) => (i.quantity || 0) > 0 && i.status !== 'CONSUMED_AND_PAID' && checkedItemIds.includes(i.id)
+                                      ).length}
+                                      )
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -2015,14 +2036,27 @@ export const AuditorPortal: React.FC = () => {
                             className="w-full focus:outline-none"
                           >
                             {currentList.length === 0 ? (
-                              showPendingOnly && pantrySubTab === 'active' ? (
+                              checkFilter === 'PENDING' && pantrySubTab === 'active' ? (
                                 <div data-testid="auditor-all-checked-msg" className="py-10 text-center bg-emerald-50 rounded-xl border border-dashed border-emerald-300">
                                   <CheckSquare className="w-7 h-7 mx-auto text-emerald-500 mb-1.5" />
                                   <p className="font-bold text-emerald-800 text-xs">Sabhi products physically check ho gaye ✓</p>
                                   <p className="text-[10px] text-emerald-600 mt-0.5">Koi pending item nahi bacha. Sab dekhne ke liye "Pending Check" band karein.</p>
                                   <button
                                     type="button"
-                                    onClick={() => setShowPendingOnly(false)}
+                                    onClick={() => setCheckFilter('ALL')}
+                                    className="mt-2 text-xs font-bold text-cyan-600 hover:underline cursor-pointer"
+                                  >
+                                    Show All Items
+                                  </button>
+                                </div>
+                              ) : checkFilter === 'CHECKED' && pantrySubTab === 'active' ? (
+                                <div data-testid="auditor-none-checked-msg" className="py-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                                  <Square className="w-7 h-7 mx-auto text-slate-400 mb-1.5" />
+                                  <p className="font-bold text-slate-700 text-xs">Abhi koi item checked nahi hai</p>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">Product card par "Check" button se tick karein — tick kiye hue items yahan review ke liye dikhenge.</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCheckFilter('ALL')}
                                     className="mt-2 text-xs font-bold text-cyan-600 hover:underline cursor-pointer"
                                   >
                                     Show All Items
@@ -2037,7 +2071,7 @@ export const AuditorPortal: React.FC = () => {
                                   onClick={() => {
                                     setProductSearchText('');
                                     setProductStatusFilter('ALL');
-                                    setShowPendingOnly(false);
+                                    setCheckFilter('ALL');
                                   }}
                                   className="mt-2 text-xs font-bold text-cyan-600 hover:underline"
                                 >

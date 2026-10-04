@@ -108,6 +108,12 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - AuditorPortal se `physicallyCheckedIds={pdfReportAudit ? undefined : checkedItemIds}` pass hota hai.
 - Verified: 2 items tick → PDF me 2/7 summary + sahi items par green badges.
 
+## Checked-Only View (2026-10-04) — VERIFIED (UI screenshots)
+- Active Stock toolbar me "Pending Check (N)" ke bagal me "Checked (N)" filter (data-testid auditor-checked-only-toggle) — tick kiye hue items dubara review karne ke liye.
+- showPendingOnly boolean ko tri-state `checkFilter: 'ALL'|'PENDING'|'CHECKED'` me convert kiya (mutually exclusive). Untick karne par item Checked view se turant hat jata hai.
+- Naya empty-state: "Abhi koi item checked nahi hai" (auditor-none-checked-msg). Reset Filters teeno filters clear karta hai.
+- Verified: Checked(0) → empty msg; 2 tick → Checked view sirf 2; untick → 1; ALL → 5.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway
