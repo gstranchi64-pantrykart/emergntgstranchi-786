@@ -31,6 +31,7 @@ import {
   BatchLedgerEntry,
   BatchOrderUsage,
   BatchSummaryStats,
+  BarcodeConsumptionEntry,
   BarcodeLifecycleDetails,
   BarcodeMergedBatchSummary,
   BarcodeSummaryStats,
@@ -6548,6 +6549,7 @@ export class BusinessService {
       createdAt: timestamp,
       updatedAt: timestamp,
       paymentType: isRecharge ? 'WALLET_RECHARGE' : (payload.paymentType || 'PRODUCT_PAYMENT'),
+      quantity: isRecharge ? 0 : ((payload as any).quantity || 1),
       isWalletRecharge: isRecharge,
       walletCredited: isRecharge,
     };
@@ -7407,6 +7409,9 @@ export class BusinessService {
     const pantryOrders: BatchOrderUsage[] = [];
 
     (db.orders || []).forEach((o) => {
+      // Cancelled orders never took stock out — exclude from sales/usage tracking
+      if (o.orderStatus === 'CANCELLED') return;
+
       const matchingItems = o.items.filter(
         (it) =>
           (it.barcode && it.barcode.trim().toLowerCase() === barcode.toLowerCase()) ||
@@ -7419,6 +7424,7 @@ export class BusinessService {
           orderId: o.id,
           orderType: o.orderType,
           orderStatus: o.orderStatus,
+          batchNumber: matchItem.batchNumber,
           createdAt: o.createdAt,
           deliveredAt: o.deliveredAt,
           customerId: o.customerId,
@@ -7588,6 +7594,179 @@ export class BusinessService {
     // Sort timeline: newest first
     ledgerTimeline.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    // 11b. Consumption & Audit History (timestamped): Pantry Pay, Auditor Missing (confirmed bills only), Returns
+    const consumptionHistory: BarcodeConsumptionEntry[] = [];
+    const unitPriceRef = resolvedProduct.sellingPrice || batches[0]?.sellingPrice || 0;
+
+    const matchesBarcodeRef = (it: { productId?: string; batchNumber?: string; barcode?: string }) =>
+      (it.barcode && it.barcode.trim().toLowerCase() === barcode.toLowerCase()) ||
+      (resolvedProduct && it.productId === resolvedProduct.id) ||
+      batches.some((b) => b.batchNumber.toLowerCase() === (it.batchNumber || '').toLowerCase());
+
+    // Pantry Pay — direct customer product payments (successful only)
+    (db.pantryPayments || [])
+      .filter(
+        (p) =>
+          p.barcode &&
+          p.barcode.trim().toLowerCase() === barcode.toLowerCase() &&
+          p.paymentStatus === 'SUCCESS' &&
+          !p.isWalletRecharge &&
+          p.paymentType !== 'WALLET_RECHARGE'
+      )
+      .forEach((p) => {
+        const qty = p.quantity || (unitPriceRef > 0 ? Math.max(1, Math.round((p.amount || 0) / unitPriceRef)) : 1);
+        // Attribute the payment to a batch via the customer's pantry card item for this barcode
+        const pciMatch = (db.pantryCardItems || []).find(
+          (pci) =>
+            pci.customerId === p.customerId &&
+            pci.barcode &&
+            pci.barcode.trim().toLowerCase() === barcode.toLowerCase()
+        );
+        consumptionHistory.push({
+          id: `CONS-PPAY-${p.id}`,
+          type: 'PANTRY_PAY',
+          customerId: p.customerId,
+          customerName: p.customerName,
+          customerMobile: p.customerMobile,
+          batchNumber: pciMatch?.batchNumber,
+          quantity: qty,
+          amount: p.amount,
+          referenceId: p.id,
+          timestamp: p.createdAt,
+          notes: `Pantry Pay ${p.paymentMethod} • Txn Ref: ${p.transactionRef}`,
+        });
+      });
+
+    // Auditor-confirmed consumption — ONLY customer-confirmed / locked bills count
+    auditorChecks.forEach((a) => {
+      const billConfirmed =
+        a.isBillConfirmed === true ||
+        a.billStatus === 'LOCKED' ||
+        a.billStatus === 'CUSTOMER_CONFIRMED' ||
+        a.status === 'LOCKED' ||
+        a.status === 'CUSTOMER_CONFIRMED';
+      if (!billConfirmed) return;
+      const ts = a.billConfirmedAt || a.completedAt || a.updatedAt || a.createdAt;
+      (a.itemsChecked || []).forEach((i) => {
+        if (!matchesBarcodeRef(i)) return;
+        if (i.walletDeducted === true) {
+          const missQty = i.qtyMissing || (i.verificationStatus === 'NOT_AVAILABLE' ? i.quantity : 0) || 1;
+          consumptionHistory.push({
+            id: `CONS-MISS-${a.id}-${i.pantryCardItemId || i.productId}`,
+            type: 'AUDITOR_MISSING',
+            customerId: a.customerId,
+            customerName: a.customerName,
+            customerMobile: a.customerMobile,
+            batchNumber: i.batchNumber,
+            quantity: missQty,
+            amount: i.walletDeductionAmount,
+            referenceId: a.billId || a.id,
+            timestamp: ts,
+            notes: `Auditor: ${a.auditorName} • Wallet deducted ₹${i.walletDeductionAmount || 0}`,
+          });
+        }
+        if ((i.qtyPantryPay || 0) > 0) {
+          consumptionHistory.push({
+            id: `CONS-APPAY-${a.id}-${i.pantryCardItemId || i.productId}`,
+            type: 'PANTRY_PAY',
+            customerId: a.customerId,
+            customerName: a.customerName,
+            customerMobile: a.customerMobile,
+            batchNumber: i.batchNumber,
+            quantity: i.qtyPantryPay || 0,
+            referenceId: a.billId || a.id,
+            timestamp: ts,
+            notes: `Auditor-marked Pantry Pay consumption • Auditor: ${a.auditorName}`,
+          });
+        }
+      });
+    });
+
+    // Customer/Auditor returns restored back into inventory
+    returns
+      .filter((r) => r.status === 'COMPLETED' || (r.status as string) === 'RETURNED_TO_INVENTORY')
+      .forEach((r) => {
+        consumptionHistory.push({
+          id: `CONS-RET-${r.id}`,
+          type: 'AUDITOR_RETURN',
+          customerId: r.customerId,
+          customerName: r.customerName,
+          batchNumber: r.batchNumber,
+          quantity: r.quantity,
+          amount: (r as any).refundCreditAmount,
+          referenceId: r.id,
+          timestamp: r.returnedToInventoryAt || (r as any).processedAt || r.pickedUpAt || r.acceptedAt || r.createdAt,
+          notes: `Reason: ${r.reason} • Order Ref: ${r.orderId}`,
+        });
+      });
+
+    consumptionHistory.sort((a, b) => parseOrderTimestamp(b.timestamp) - parseOrderTimestamp(a.timestamp));
+
+    const totalPantryPayConsumed = consumptionHistory
+      .filter((e) => e.type === 'PANTRY_PAY')
+      .reduce((s, e) => s + e.quantity, 0);
+    const totalAuditorMissing = consumptionHistory
+      .filter((e) => e.type === 'AUDITOR_MISSING')
+      .reduce((s, e) => s + e.quantity, 0);
+
+    // Live customer home pantry stock for this barcode (QUICK/COD delivered orders excluded — those are outright sales, not pantry stock)
+    const holdingsForBarcode = this.getCustomerPantryHoldings({ barcode });
+    const totalPantryInStock = holdingsForBarcode.summary.totalCurrentPantryQuantity;
+
+    // 11c. Per-batch AUTO-CALCULATION from real transaction records (orders, live holdings, payments, confirmed audits)
+    const normalizeBatchKey = (v?: string) => (v || '').trim().toLowerCase().replace(/^#/, '');
+
+    const quickQtyByBatch = new Map<string, number>();
+    quickOrders.forEach((u) => {
+      const key = normalizeBatchKey(u.batchNumber);
+      if (key) quickQtyByBatch.set(key, (quickQtyByBatch.get(key) || 0) + u.quantitySold);
+    });
+    const pantryQtyByBatch = new Map<string, number>();
+    pantryOrders.forEach((u) => {
+      const key = normalizeBatchKey(u.batchNumber);
+      if (key) pantryQtyByBatch.set(key, (pantryQtyByBatch.get(key) || 0) + u.quantitySold);
+    });
+    const returnedQtyByBatch = new Map<string, number>();
+    returns
+      .filter((r) => r.status === 'COMPLETED' || (r.status as string) === 'RETURNED_TO_INVENTORY')
+      .forEach((r) => {
+        const key = normalizeBatchKey(r.batchNumber);
+        if (key) returnedQtyByBatch.set(key, (returnedQtyByBatch.get(key) || 0) + r.quantity);
+      });
+    const inStockQtyByBatch = new Map<string, number>();
+    holdingsForBarcode.items.forEach((h) => {
+      const key = normalizeBatchKey(h.batchNumber);
+      if (key) inStockQtyByBatch.set(key, (inStockQtyByBatch.get(key) || 0) + (h.currentPantryQuantity || 0));
+    });
+    const pantryPayQtyByBatch = new Map<string, number>();
+    consumptionHistory
+      .filter((e) => e.type === 'PANTRY_PAY' && e.batchNumber)
+      .forEach((e) => {
+        const key = normalizeBatchKey(e.batchNumber);
+        if (key) pantryPayQtyByBatch.set(key, (pantryPayQtyByBatch.get(key) || 0) + e.quantity);
+      });
+    const missingQtyByBatch = new Map<string, number>();
+    consumptionHistory
+      .filter((e) => e.type === 'AUDITOR_MISSING' && e.batchNumber)
+      .forEach((e) => {
+        const key = normalizeBatchKey(e.batchNumber);
+        if (key) missingQtyByBatch.set(key, (missingQtyByBatch.get(key) || 0) + e.quantity);
+      });
+
+    batchSummaries.forEach((bs) => {
+      const key = normalizeBatchKey(bs.batchNumber);
+      const derivedQuick = quickQtyByBatch.get(key);
+      const derivedPantry = pantryQtyByBatch.get(key);
+      const derivedReturned = returnedQtyByBatch.get(key);
+      // Prefer auto-calculated values from real order/return records; fall back to stored batch counters
+      if (derivedQuick !== undefined) bs.quickSoldQuantity = derivedQuick;
+      if (derivedPantry !== undefined) bs.pantrySoldQuantity = derivedPantry;
+      if (derivedReturned !== undefined) bs.returnedQuantity = derivedReturned;
+      bs.pantryInStockQuantity = inStockQtyByBatch.get(key) || 0;
+      bs.pantryPayConsumedQuantity = pantryPayQtyByBatch.get(key) || 0;
+      bs.auditorMissingQuantity = missingQtyByBatch.get(key) || 0;
+    });
+
     // 12. Calculate Summary Across Barcode
     const totalInitialPurchased =
       purchases.reduce((sum, p) => sum + p.quantity, 0) ||
@@ -7595,11 +7774,14 @@ export class BusinessService {
 
     const totalAvailableStock = batches.reduce((sum, b) => sum + b.availableQuantity, 0);
     const totalQuickSold = quickOrders.reduce((sum, qo) => sum + qo.quantitySold, 0) || batches.reduce((sum, b) => sum + (b.quickSoldQuantity || 0), 0);
-    const totalPantrySold = pantryOrders.reduce((sum, po) => sum + po.quantitySold, 0) || batches.reduce((sum, b) => sum + (b.pantrySoldQuantity || 0), 0);
+    // Pantry units that LEFT the warehouse via pantry-card orders (delivered + in-transit)
+    const totalPantryDelivered = pantryOrders.reduce((sum, po) => sum + po.quantitySold, 0) || batches.reduce((sum, b) => sum + (b.pantrySoldQuantity || 0), 0);
+    // "Pantry Sold" = units CONSUMED from customer home pantry: Pantry Pay payments + confirmed Auditor Missing
+    const totalPantrySold = totalPantryPayConsumed + totalAuditorMissing;
     const totalReturnedStock =
       returns.filter((r) => r.status === 'COMPLETED' || (r.status as string) === 'RETURNED_TO_INVENTORY').reduce((sum, r) => sum + r.quantity, 0) ||
       batches.reduce((sum, b) => sum + (b.returnedQuantity || 0), 0);
-    const totalDownStock = totalQuickSold + totalPantrySold;
+    const totalDownStock = totalQuickSold + totalPantryDelivered;
 
     // Average purchase rate (weighted if possible)
     let totalSpent = purchases.reduce((sum, p) => sum + p.quantity * p.purchaseRate, 0);
@@ -7611,8 +7793,8 @@ export class BusinessService {
     const sellingPrice = resolvedProduct.sellingPrice || (batches[0]?.sellingPrice ?? 0);
     const mrp = resolvedProduct.mrp || (batches[0]?.mrp ?? 0);
     const totalPurchaseCost = totalInitialPurchased * averagePurchaseRate;
-    const realizedRevenue = (totalQuickSold + totalPantrySold) * sellingPrice;
-    const profitEarned = realizedRevenue - ((totalQuickSold + totalPantrySold) * averagePurchaseRate);
+    const realizedRevenue = (totalQuickSold + totalPantryDelivered) * sellingPrice;
+    const profitEarned = realizedRevenue - ((totalQuickSold + totalPantryDelivered) * averagePurchaseRate);
     const marginPercent = averagePurchaseRate > 0 ? Number((((sellingPrice - averagePurchaseRate) / averagePurchaseRate) * 100).toFixed(1)) : 0;
 
     const availableBatches = batches.filter((b) => b.availableQuantity > 0);
@@ -7647,6 +7829,9 @@ export class BusinessService {
       totalQuickSold,
       totalPantrySold,
       totalReturnedStock,
+      totalPantryInStock,
+      totalPantryPayConsumed,
+      totalAuditorMissing,
       averagePurchaseRate,
       sellingPrice,
       mrp,
@@ -7674,6 +7859,7 @@ export class BusinessService {
       auditorChecks,
       auditLogs,
       ledgerTimeline,
+      consumptionHistory,
     };
   }
 
@@ -7807,8 +7993,10 @@ export class BusinessService {
     });
 
     // 2. Process all orders (active PANTRY orders or DELIVERED customer orders) that don't yet have a PantryCardItem
+    // 2. Process DELIVERED PANTRY orders that don't yet have a PantryCardItem
+    // (QUICK/COD orders are outright sales — never pantry stock; only delivered items sit in customer home pantry)
     (db.orders || [])
-      .filter((o) => (o.orderType === 'PANTRY' || o.orderStatus === 'DELIVERED') && o.orderStatus !== 'CANCELLED')
+      .filter((o) => o.orderType === 'PANTRY' && o.orderStatus === 'DELIVERED')
       .forEach((ord) => {
         const cust = customerMap.get(ord.customerId);
         ord.items.forEach((item, idx) => {

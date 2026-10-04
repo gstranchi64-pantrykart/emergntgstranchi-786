@@ -924,6 +924,7 @@ export interface PantryPayment {
   createdAt: string;
   updatedAt: string;
   paymentType?: 'PRODUCT_PAYMENT' | 'WALLET_RECHARGE';
+  quantity?: number; // Units consumed & paid (product payments only)
   isWalletRecharge?: boolean;
   walletCredited?: boolean;
 }
@@ -1017,6 +1018,7 @@ export interface BatchOrderUsage {
   orderId: string;
   orderType: OrderType;
   orderStatus: OrderStatus;
+  batchNumber?: string;
   createdAt: string;
   deliveredAt?: string;
   customerId: string;
@@ -1079,6 +1081,9 @@ export interface BarcodeMergedBatchSummary {
   quickSoldQuantity: number;
   pantrySoldQuantity: number;
   returnedQuantity: number;
+  pantryInStockQuantity: number; // Auto-calc: live units currently held at customer homes
+  pantryPayConsumedQuantity: number; // Auto-calc: units consumed & paid via Pantry Pay
+  auditorMissingQuantity: number; // Auto-calc: units marked missing on confirmed audit bills
   purchaseRate: number;
   sellingPrice: number;
   mrp: number;
@@ -1097,6 +1102,9 @@ export interface BarcodeSummaryStats {
   totalQuickSold: number;
   totalPantrySold: number;
   totalReturnedStock: number;
+  totalPantryInStock: number; // Live units in customer home pantries for this barcode
+  totalPantryPayConsumed: number; // Units consumed & paid via Pantry Pay
+  totalAuditorMissing: number; // Units missing on customer-confirmed audit bills only
   averagePurchaseRate: number;
   sellingPrice: number;
   mrp: number;
@@ -1108,6 +1116,20 @@ export interface BarcodeSummaryStats {
   hasNearExpiry: boolean;
   nearestExpiryDate: string;
   daysToNearestExpiry: number;
+}
+
+export interface BarcodeConsumptionEntry {
+  id: string;
+  type: 'PANTRY_PAY' | 'AUDITOR_MISSING' | 'AUDITOR_RETURN';
+  customerId: string;
+  customerName: string;
+  customerMobile?: string;
+  batchNumber?: string;
+  quantity: number;
+  amount?: number;
+  referenceId: string;
+  timestamp: string;
+  notes?: string;
 }
 
 export interface BarcodeLifecycleDetails {
@@ -1124,6 +1146,7 @@ export interface BarcodeLifecycleDetails {
   auditorChecks: AuditorCheck[];
   auditLogs: AuditLog[];
   ledgerTimeline: BatchLedgerEntry[];
+  consumptionHistory: BarcodeConsumptionEntry[];
 }
 
 export interface CustomerPantryHolding {

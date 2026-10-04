@@ -295,11 +295,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     if (options?.body) requestBodyParsed = JSON.parse(String(options.body));
   } catch {}
 
-  // Pantry Card & Pantry Pay must always talk to the live Express backend
-  // (single source of truth) so that payments instantly mark items CONSUMED_AND_PAID.
-  // The Supabase read-layer derives pantry items from orders and never reflects
-  // Pantry Pay consumption, so bypass it for these routes.
-  const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments)(\/|\?|$)/.test(url);
+  // Pantry Card, Pantry Pay, live pantry holdings and computed barcode/batch lifecycle
+  // reports must always talk to the live Express backend (single source of truth).
+  // The Supabase read-layer derives data from raw tables and never reflects
+  // Pantry Pay consumption, audit settlements or merged reconciliations.
+  const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments|pantry\/active-holdings|inventory\/barcode\/[^/]+\/details|batches\/[^/]+\/details)(\/|\?|$)/.test(url);
   const directResult = isPantryLiveRoute ? null : await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
   if (directResult !== null) {
     return directResult;
