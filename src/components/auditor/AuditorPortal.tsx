@@ -142,6 +142,7 @@ export const AuditorPortal: React.FC = () => {
   const productsScrollRef = useRef<HTMLDivElement>(null);
   const [productSearchText, setProductSearchText] = useState('');
   const [productStatusFilter, setProductStatusFilter] = useState<'ALL' | 'DISCREPANCY' | 'MISSING' | 'DAMAGED' | 'OK'>('ALL');
+  const [showPendingOnly, setShowPendingOnly] = useState(false); // UI-only: sirf unticked (physically unchecked) items dikhaye
   const [zoomedImage, setZoomedImage] = useState<{ src: string; title: string; barcode?: string; batchNumber?: string; mfgDate?: string; expDate?: string } | null>(null);
 
   const scrollProductsBy = (offset: number) => {
@@ -1735,6 +1736,8 @@ export const AuditorPortal: React.FC = () => {
                     }
 
                     const currentList = pantryItems.filter((i) => {
+                      // Pending-Only toggle: active tab par tick kiye hue items chhupa do
+                      if (showPendingOnly && pantrySubTab === 'active' && checkedItemIds.includes(i.id)) return false;
                       const matchesTab = pantrySubTab === 'active' ? (i.quantity > 0 && i.status !== 'CONSUMED_AND_PAID') : (i.quantity === 0 || i.status === 'CONSUMED_AND_PAID');
                       const q = (productSearchText || searchQuery).toLowerCase();
                       const matchesSearch = !q || (i.productName || '').toLowerCase().includes(q) || (i.barcode || '').includes(q) || (i.batchNumber || '').toLowerCase().includes(q);
@@ -1936,6 +1939,22 @@ export const AuditorPortal: React.FC = () => {
                                 >
                                   Missing
                                 </button>
+                                {pantrySubTab === 'active' && (
+                                  <button
+                                    type="button"
+                                    data-testid="auditor-pending-only-toggle"
+                                    onClick={() => setShowPendingOnly((v) => !v)}
+                                    className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${showPendingOnly ? 'bg-cyan-700 text-white' : 'text-slate-500 hover:text-cyan-700'}`}
+                                    title="Sirf un items ko dikhayein jinhe abhi tick nahi kiya gaya — lambe stock me jaldi se pending products milane ke liye"
+                                  >
+                                    <Square className="w-3 h-3" />
+                                    Pending Check (
+                                    {pantryItems.filter(
+                                      (i) => (i.quantity || 0) > 0 && i.status !== 'CONSUMED_AND_PAID' && !checkedItemIds.includes(i.id)
+                                    ).length}
+                                    )
+                                  </button>
+                                )}
                               </div>
                             </div>
 
@@ -1996,6 +2015,20 @@ export const AuditorPortal: React.FC = () => {
                             className="w-full focus:outline-none"
                           >
                             {currentList.length === 0 ? (
+                              showPendingOnly && pantrySubTab === 'active' ? (
+                                <div data-testid="auditor-all-checked-msg" className="py-10 text-center bg-emerald-50 rounded-xl border border-dashed border-emerald-300">
+                                  <CheckSquare className="w-7 h-7 mx-auto text-emerald-500 mb-1.5" />
+                                  <p className="font-bold text-emerald-800 text-xs">Sabhi products physically check ho gaye ✓</p>
+                                  <p className="text-[10px] text-emerald-600 mt-0.5">Koi pending item nahi bacha. Sab dekhne ke liye "Pending Check" band karein.</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPendingOnly(false)}
+                                    className="mt-2 text-xs font-bold text-cyan-600 hover:underline cursor-pointer"
+                                  >
+                                    Show All Items
+                                  </button>
+                                </div>
+                              ) : (
                               <div className="py-10 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                 <Search className="w-6 h-6 mx-auto text-slate-300 mb-1" />
                                 <p className="font-semibold text-slate-600 text-xs">No products match the selected filter</p>
@@ -2004,12 +2037,14 @@ export const AuditorPortal: React.FC = () => {
                                   onClick={() => {
                                     setProductSearchText('');
                                     setProductStatusFilter('ALL');
+                                    setShowPendingOnly(false);
                                   }}
                                   className="mt-2 text-xs font-bold text-cyan-600 hover:underline"
                                 >
                                   Reset Filters
                                 </button>
                               </div>
+                              )
                             ) : (
                               <div className="space-y-4">
                                 {currentList.map((item, itemIdx) => {

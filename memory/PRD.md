@@ -97,6 +97,11 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - UI-only aid (user requirement: koi business logic impact nahi) — itemStatuses/bill/settlement untouched. State sirf localStorage (pm_audit_checklist) me; audit submit hone par auto-reset. Refresh par persist.
 - Verified: 5 active items, tick→1/4→2/3 (40% bar), untick→1/4, reload persistence ✓.
 
+## Pending-Only Filter (2026-10-04) — VERIFIED (UI screenshots)
+- Active Stock toolbar me "Pending Check (N)" toggle (data-testid auditor-pending-only-toggle) — ON karne par sirf unticked (physically unchecked) items dikhte hain; counter "3 of 5" live update hota hai.
+- Sab checked hone par emerald empty-state: "Sabhi products physically check ho gaye ✓" + "Show All Items" (auditor-all-checked-msg). Reset Filters ab pending-only bhi clear karta hai.
+- Verified: 2 tick → Pending Check ON → 3 visible; sab tick → all-checked message; Show All → 5 wapas.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway
