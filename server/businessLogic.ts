@@ -7988,9 +7988,9 @@ export class BusinessService {
       holdingsMap.set(pci.id, holding);
     });
 
-    // 2. Process all orders (active PANTRY orders or DELIVERED customer orders) that don't yet have a PantryCardItem
+    // 2. Process all orders (active PANTRY orders) that don't yet have a PantryCardItem
     (db.orders || [])
-      .filter((o) => (o.orderType === 'PANTRY' || o.orderStatus === 'DELIVERED') && o.orderStatus !== 'CANCELLED')
+      .filter((o) => o.orderType === 'PANTRY' && o.orderStatus !== 'CANCELLED')
       .forEach((ord) => {
         const cust = customerMap.get(ord.customerId);
         ord.items.forEach((item, idx) => {
