@@ -1172,7 +1172,8 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                   const availExclReturned = summary.totalAvailableStock - returnedQ;
                   const ppayQ = summary.totalPantryPayConsumed || 0;
                   const missingQ = summary.totalAuditorMissing || 0;
-                  const accountedTotal = availExclReturned + summary.totalQuickSold + inStockLive + returnedQ + ppayQ + missingQ;
+                  const inTransitQ = summary.totalPantryInTransit || 0;
+                  const accountedTotal = availExclReturned + summary.totalQuickSold + inStockLive + returnedQ + ppayQ + missingQ + inTransitQ;
                   const variance = summary.totalInitialPurchased - accountedTotal;
 
                   const reconRows = [
@@ -1194,7 +1195,7 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                             <span>Quantity Reconciliation — Auto Calculated</span>
                           </h4>
                           <p className="text-[11px] text-emerald-800/80 mt-0.5 font-mono">
-                            Purchased = Available + Quick Sold + Pantry In-Stock + Returned + Pantry-Pay Consumed + Auditor Missing
+                            Purchased = Available + Quick Sold + Pantry In-Stock + Returned + Pantry-Pay Consumed + Auditor Missing{inTransitQ > 0 ? ' + In-Transit' : ''}
                           </p>
                         </div>
                         {variance === 0 ? (
@@ -1228,9 +1229,22 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                         ))}
                       </div>
 
+                      {/* In-Transit temporary variance info row */}
+                      {inTransitQ > 0 && (
+                        <div data-testid="recon-in-transit-row" className="mx-3 mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+                          <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="text-[11px] text-amber-900">
+                            <strong>{inTransitQ} unit{inTransitQ > 1 ? 's' : ''} In-Transit</strong> — pantry stock warehouse se nikal gaya par abhi customer home pantry me deliver nahi hua. Ye <strong>temporary variance</strong> hai; delivery hote hi ye "Pantry In-Stock" me chala jayega.
+                            <span className="block text-[10px] text-amber-700/80 font-mono mt-0.5">
+                              Formula me shaamil: + {inTransitQ} In-Transit
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                         <div data-testid="recon-formula-strip" className="text-[11px] font-mono text-slate-600">
-                          ({summary.totalAvailableStock} − {returnedQ}) + {summary.totalQuickSold} + {inStockLive} + {returnedQ} + {ppayQ} + {missingQ} = <strong className="text-slate-900">{accountedTotal}</strong> accounted / <strong className="text-indigo-700">{summary.totalInitialPurchased}</strong> purchased
+                          ({summary.totalAvailableStock} − {returnedQ}) + {summary.totalQuickSold} + {inStockLive} + {returnedQ} + {ppayQ} + {missingQ}{inTransitQ > 0 ? ` + ${inTransitQ}` : ''} = <strong className="text-slate-900">{accountedTotal}</strong> accounted / <strong className="text-indigo-700">{summary.totalInitialPurchased}</strong> purchased
                         </div>
                         <div className="text-[10px] text-slate-400">Damage/Expiry excluded • Cancelled orders excluded • Missing counted on confirmed bills only</div>
                       </div>

@@ -3,6 +3,7 @@ import {
   BatchLifecycleDetails,
   BatchLedgerEntry,
   BatchOrderUsage,
+  BarcodeConsumptionEntry,
   PurchaseEntry,
 } from '../../types';
 import { api } from '../../services/api';
@@ -362,6 +363,137 @@ export const BatchDetailHistoryModal: React.FC<BatchDetailHistoryModalProps> = (
                 <div className="text-[10px] text-slate-500 font-medium mt-0.5">
                   CP: ₹{data.summary.purchaseRate} • SP: ₹{data.summary.sellingPrice}
                 </div>
+              </div>
+            </div>
+
+            {/* QUANTITY RECONCILIATION BOX (Auto-Calculated) — same model as Barcode modal */}
+            {(() => {
+              const s = data.summary;
+              const returnedQ = s.totalReturnedStock || 0;
+              const availExclReturned = s.currentAvailableStock - returnedQ;
+              const inStock = s.totalPantryInStock || 0;
+              const ppayQ = s.totalPantryPayConsumed || 0;
+              const missingQ = s.totalAuditorMissing || 0;
+              const inTransitQ = s.totalPantryInTransit || 0;
+              const accounted = availExclReturned + s.totalQuickSold + inStock + returnedQ + ppayQ + missingQ + inTransitQ;
+              const variance = s.initialStockPurchased - accounted;
+              const rows = [
+                { id: 'purchased', label: 'Purchased (Inward)', value: s.initialStockPurchased, note: `${data.purchases.length} entries`, cls: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200' },
+                { id: 'available', label: 'Available (Warehouse)', value: s.currentAvailableStock, note: returnedQ > 0 ? `Incl. ${returnedQ} restored — counts ${availExclReturned}` : 'Current stock', cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+                { id: 'quick-sold', label: 'Quick Sold (COD)', value: s.totalQuickSold, note: `${data.quickOrders.length} quick orders`, cls: 'text-rose-700', bg: 'bg-rose-50 border-rose-200' },
+                { id: 'pantry-instock', label: 'Pantry In-Stock', value: inStock, note: 'Delivered, not consumed yet', cls: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+                { id: 'returned', label: 'Returned (Restored)', value: returnedQ, note: 'Back in warehouse', cls: 'text-sky-700', bg: 'bg-sky-50 border-sky-200' },
+                { id: 'pantry-pay', label: 'Pantry-Pay Consumed', value: ppayQ, note: 'Paid via Pantry Pay', cls: 'text-teal-700', bg: 'bg-teal-50 border-teal-200' },
+                { id: 'auditor-missing', label: 'Auditor Missing', value: missingQ, note: 'Confirmed bills (wallet)', cls: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+              ];
+              return (
+                <div data-testid="batch-quantity-reconciliation-box" className="bg-white rounded-xl border border-emerald-200 overflow-hidden shadow-xs">
+                  <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                        <span>Quantity Reconciliation — Auto Calculated (Batch #{data.batch.batchNumber})</span>
+                      </h4>
+                      <p className="text-[11px] text-emerald-800/80 mt-0.5 font-mono">
+                        Purchased = Available + Quick Sold + Pantry In-Stock + Returned + Pantry-Pay Consumed + Auditor Missing{inTransitQ > 0 ? ' + In-Transit' : ''}
+                      </p>
+                    </div>
+                    {variance === 0 ? (
+                      <span data-testid="batch-recon-result-badge" className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold flex items-center gap-1 shrink-0">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Fully Matched ({accounted}/{s.initialStockPurchased})
+                      </span>
+                    ) : (
+                      <span data-testid="batch-recon-result-badge" className="px-2.5 py-1 rounded-lg bg-amber-500 text-white text-[11px] font-bold flex items-center gap-1 shrink-0" title="Difference between purchased and accounted units">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Variance: {variance > 0 ? `${variance} unaccounted` : `${Math.abs(variance)} over-counted`}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 p-3">
+                    {rows.map((r) => (
+                      <div
+                        key={r.id}
+                        data-testid={`batch-recon-${r.id}`}
+                        onClick={r.id === 'pantry-instock' ? () => setShowPantryCustomerModal(true) : undefined}
+                        className={`p-2 rounded-lg border ${r.bg} text-center ${r.id === 'pantry-instock' ? 'cursor-pointer hover:shadow-xs' : ''}`}
+                        title={r.note}
+                      >
+                        <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 leading-tight">{r.label}</div>
+                        <div className={`text-lg font-black ${r.cls} mt-0.5`}>{r.value}</div>
+                        <div className="text-[9px] text-slate-400 leading-tight mt-0.5 truncate">{r.note}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {inTransitQ > 0 && (
+                    <div data-testid="batch-recon-in-transit-row" className="mx-3 mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+                      <Truck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] text-amber-900">
+                        <strong>{inTransitQ} unit{inTransitQ > 1 ? 's' : ''} In-Transit</strong> — warehouse se nikal gaya par abhi customer home pantry me deliver nahi hua. Ye <strong>temporary variance</strong> hai; delivery hote hi "Pantry In-Stock" me chala jayega.
+                        <span className="block text-[10px] text-amber-700/80 font-mono mt-0.5">Formula me shaamil: + {inTransitQ} In-Transit</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div data-testid="batch-recon-formula-strip" className="text-[11px] font-mono text-slate-600">
+                      ({s.currentAvailableStock} − {returnedQ}) + {s.totalQuickSold} + {inStock} + {returnedQ} + {ppayQ} + {missingQ}{inTransitQ > 0 ? ` + ${inTransitQ}` : ''} = <strong className="text-slate-900">{accounted}</strong> accounted / <strong className="text-indigo-700">{s.initialStockPurchased}</strong> purchased
+                    </div>
+                    <div className="text-[10px] text-slate-400">Damage/Expiry excluded • Cancelled excluded • Missing on confirmed bills only</div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* CONSUMPTION & AUDIT HISTORY BOX (Timestamped Pantry Sold Timeline) */}
+            <div data-testid="batch-consumption-history-box" className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+              <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <RotateCcw className="w-4 h-4 text-orange-600" />
+                  <span>Consumption &amp; Audit History — Pantry Sold Timeline ({(data.consumptionHistory || []).length} Records)</span>
+                </h4>
+                <span className="text-[10px] text-slate-400">Pantry Pay • Auditor Missing (confirmed) • Returns — date &amp; time ke saath</span>
+              </div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                {(data.consumptionHistory || []).length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs">
+                    <Clock className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+                    No consumption records yet for this batch.
+                  </div>
+                ) : (
+                  (data.consumptionHistory || []).map((e: BarcodeConsumptionEntry) => {
+                    const meta =
+                      e.type === 'PANTRY_PAY'
+                        ? { label: 'Pantry Pay', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300', qtyCls: 'text-emerald-700' }
+                        : e.type === 'AUDITOR_MISSING'
+                        ? { label: 'Auditor Missing', cls: 'bg-rose-100 text-rose-800 border-rose-300', qtyCls: 'text-rose-700' }
+                        : { label: 'Auditor Return', cls: 'bg-sky-100 text-sky-800 border-sky-300', qtyCls: 'text-sky-700' };
+                    return (
+                      <div key={e.id} data-testid={`batch-consumption-entry-${e.id}`} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-slate-50/60 transition">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase ${meta.cls}`}>{meta.label}</span>
+                            <span className="font-bold text-slate-900">{e.customerName}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span className="font-mono">{(e.timestamp || '').replace('T', ' ').replace(/\.\d+Z?$/, '').replace('Z', '') || '—'}</span>
+                            <span>• Ref: <strong className="font-mono">{e.referenceId}</strong></span>
+                          </div>
+                          {e.notes && <div className="text-[10px] text-slate-400">{e.notes}</div>}
+                        </div>
+                        <div className="sm:text-right shrink-0">
+                          <div className={`text-base font-black ${meta.qtyCls}`}>
+                            {e.type === 'AUDITOR_RETURN' ? '+' : '−'}{e.quantity} units
+                          </div>
+                          {e.amount !== undefined && e.amount > 0 && (
+                            <div className="text-[10px] text-slate-500 font-mono">₹{e.amount.toLocaleString('en-IN')}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 

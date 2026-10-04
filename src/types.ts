@@ -1042,6 +1042,10 @@ export interface BatchSummaryStats {
   totalQuickSold: number;
   totalPantrySold: number;
   totalReturnedStock: number;
+  totalPantryInStock: number; // Live units held in customer home pantries (this batch)
+  totalPantryInTransit: number; // Stock-deducted pantry units not yet delivered (temporary variance)
+  totalPantryPayConsumed: number; // Consumed & paid via Pantry Pay
+  totalAuditorMissing: number; // Missing on customer-confirmed audit bills only
   purchaseRate: number;
   sellingPrice: number;
   mrp: number;
@@ -1069,6 +1073,7 @@ export interface BatchLifecycleDetails {
   auditorChecks: AuditorCheck[];
   auditLogs: AuditLog[];
   ledgerTimeline: BatchLedgerEntry[];
+  consumptionHistory: BarcodeConsumptionEntry[];
 }
 
 export interface BarcodeMergedBatchSummary {
@@ -1103,6 +1108,7 @@ export interface BarcodeSummaryStats {
   totalPantrySold: number;
   totalReturnedStock: number;
   totalPantryInStock: number; // Live units in customer home pantries for this barcode
+  totalPantryInTransit: number; // Pantry units stock-deducted but not yet delivered (temporary variance)
   totalPantryPayConsumed: number; // Units consumed & paid via Pantry Pay
   totalAuditorMissing: number; // Units missing on customer-confirmed audit bills only
   averagePurchaseRate: number;
