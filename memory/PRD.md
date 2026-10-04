@@ -102,6 +102,12 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Sab checked hone par emerald empty-state: "Sabhi products physically check ho gaye ✓" + "Show All Items" (auditor-all-checked-msg). Reset Filters ab pending-only bhi clear karta hai.
 - Verified: 2 tick → Pending Check ON → 3 visible; sab tick → all-checked message; Show All → 5 wapas.
 
+## Checklist Summary in PDF Report (2026-10-04) — VERIFIED (UI screenshot)
+- AuditorWorkPdfReport me naya optional prop `physicallyCheckedIds` (sirf live draft workspace report ke liye; past/submitted audits ke liye undefined → badges hidden).
+- PDF table header me "✓ Physically Checked: X/Y" summary chip (pdf-physically-checked-summary) aur har item ke Product cell me badge (pdf-physical-check-{id}): "✓ Physically Checked" (emerald) / "Pending Physical Check" (slate).
+- AuditorPortal se `physicallyCheckedIds={pdfReportAudit ? undefined : checkedItemIds}` pass hota hai.
+- Verified: 2 items tick → PDF me 2/7 summary + sahi items par green badges.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway

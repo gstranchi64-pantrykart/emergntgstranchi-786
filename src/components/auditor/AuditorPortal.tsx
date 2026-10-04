@@ -3336,6 +3336,7 @@ export const AuditorPortal: React.FC = () => {
         >
           <div className="p-3 sm:p-5 bg-slate-100 max-h-[82vh] overflow-y-auto">
             <AuditorWorkPdfReport
+              physicallyCheckedIds={pdfReportAudit ? undefined : checkedItemIds}
               audit={
                 pdfReportAudit ||
                 (selectedCustomer

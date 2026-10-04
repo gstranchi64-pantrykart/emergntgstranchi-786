@@ -21,6 +21,7 @@ interface AuditorWorkPdfReportProps {
     remarks: string;
   }>;
   overallRemarks?: string;
+  physicallyCheckedIds?: string[]; // Live workspace checklist (draft report only) — undefined for past/submitted audits
   auditorSignature?: boolean;
   customerSignature?: boolean;
   activeAudit?: AuditorCheck | null;
@@ -36,6 +37,7 @@ export const AuditorWorkPdfReport: React.FC<AuditorWorkPdfReportProps> = ({
   pantryItems,
   itemStatuses,
   overallRemarks,
+  physicallyCheckedIds,
   auditorSignature = true,
   customerSignature = true,
   activeAudit,
@@ -299,7 +301,14 @@ export const AuditorWorkPdfReport: React.FC<AuditorWorkPdfReportProps> = ({
         <div className="mb-5 overflow-hidden rounded-lg border border-slate-300">
           <div className="bg-slate-800 text-white px-3.5 py-2 flex items-center justify-between font-bold text-xs uppercase tracking-wider">
             <span>Physical Inventory Verification Data (All Fields)</span>
-            <span className="text-[10px] font-normal text-slate-300">{resolvedPantryItems.length} Products Inspected</span>
+            <span className="text-[10px] font-normal text-slate-300">
+              {resolvedPantryItems.length} Products Inspected
+              {physicallyCheckedIds !== undefined && (
+                <span data-testid="pdf-physically-checked-summary" className="ml-2 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                  ✓ Physically Checked: {resolvedPantryItems.filter((i) => physicallyCheckedIds.includes(i.id)).length}/{resolvedPantryItems.length}
+                </span>
+              )}
+            </span>
           </div>
 
           <table className="w-full text-left text-[11px] border-collapse">
@@ -354,6 +363,18 @@ export const AuditorWorkPdfReport: React.FC<AuditorWorkPdfReportProps> = ({
                           {item.productName || (item as any).name || (item as any).title || (item as any).pantryCardItemName || 'Grocery Pantry Item'}
                         </div>
                         <div className="text-[9px] text-slate-500 font-mono">Batch: {item.batchNumber || 'N/A'}</div>
+                        {physicallyCheckedIds !== undefined && (
+                          <div
+                            data-testid={`pdf-physical-check-${item.id}`}
+                            className={`mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                              physicallyCheckedIds.includes(item.id)
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-slate-100 text-slate-500 border border-slate-300'
+                            }`}
+                          >
+                            {physicallyCheckedIds.includes(item.id) ? '✓ Physically Checked' : 'Pending Physical Check'}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 px-2 border-r border-slate-200 font-mono text-[10px] text-slate-600">
                         {item.barcode || 'N/A'}
