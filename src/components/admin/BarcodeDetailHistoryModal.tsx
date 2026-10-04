@@ -1173,7 +1173,8 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
                   const ppayQ = summary.totalPantryPayConsumed || 0;
                   const missingQ = summary.totalAuditorMissing || 0;
                   const inTransitQ = summary.totalPantryInTransit || 0;
-                  const accountedTotal = availExclReturned + summary.totalQuickSold + inStockLive + returnedQ + ppayQ + missingQ + inTransitQ;
+                  const reconciledQ = summary.totalReconciledAdjustment || 0;
+                  const accountedTotal = availExclReturned + summary.totalQuickSold + inStockLive + returnedQ + ppayQ + missingQ + inTransitQ + reconciledQ;
                   const variance = summary.totalInitialPurchased - accountedTotal;
 
                   const reconRows = [
@@ -1244,7 +1245,7 @@ export const BarcodeDetailHistoryModal: React.FC<BarcodeDetailHistoryModalProps>
 
                       <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                         <div data-testid="recon-formula-strip" className="text-[11px] font-mono text-slate-600">
-                          ({summary.totalAvailableStock} − {returnedQ}) + {summary.totalQuickSold} + {inStockLive} + {returnedQ} + {ppayQ} + {missingQ}{inTransitQ > 0 ? ` + ${inTransitQ}` : ''} = <strong className="text-slate-900">{accountedTotal}</strong> accounted / <strong className="text-indigo-700">{summary.totalInitialPurchased}</strong> purchased
+                          ({summary.totalAvailableStock} − {returnedQ}) + {summary.totalQuickSold} + {inStockLive} + {returnedQ} + {ppayQ} + {missingQ}{inTransitQ > 0 ? ` + ${inTransitQ}` : ''}{reconciledQ !== 0 ? ` + ${reconciledQ} (resolved)` : ''} = <strong className="text-slate-900">{accountedTotal}</strong> accounted / <strong className="text-indigo-700">{summary.totalInitialPurchased}</strong> purchased
                         </div>
                         <div className="text-[10px] text-slate-400">Damage/Expiry excluded • Cancelled orders excluded • Missing counted on confirmed bills only</div>
                       </div>

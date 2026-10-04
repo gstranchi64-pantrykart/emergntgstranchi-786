@@ -32,11 +32,11 @@ import {
   BatchOrderUsage,
   BatchSummaryStats,
   BarcodeConsumptionEntry,
-  BarcodeLifecycleDetails,
-  BarcodeMergedBatchSummary,
+  BarcodeLifecycleDetails,  BarcodeMergedBatchSummary,
   BarcodeSummaryStats,
   CustomerPantryHolding,
   CustomerPantryHoldingsResponse,
+  ReconciliationAdjustment,
 } from '../src/types';
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -7852,6 +7852,11 @@ export class BusinessService {
     });
     const totalPantryInTransit = inTransitEntries.reduce((s, e) => s + e.quantity, 0);
 
+    // Admin-resolved reconciliation adjustments (shrinkage / legacy write-off) that explain unaccounted units
+    const totalReconciledAdjustment = (db.reconciliationAdjustments || [])
+      .filter((r) => r.barcode && r.barcode.trim().toLowerCase() === barcode.toLowerCase())
+      .reduce((s, r) => s + (r.quantity || 0), 0);
+
     // 11c. Per-batch AUTO-CALCULATION from real transaction records (orders, live holdings, payments, confirmed audits)
     const normalizeBatchKey = (v?: string) => (v || '').trim().toLowerCase().replace(/^#/, '');
 
@@ -7972,6 +7977,7 @@ export class BusinessService {
       totalPantryInTransit,
       totalPantryPayConsumed,
       totalAuditorMissing,
+      totalReconciledAdjustment,
       averagePurchaseRate,
       sellingPrice,
       mrp,
@@ -8001,6 +8007,149 @@ export class BusinessService {
       ledgerTimeline,
       consumptionHistory,
     };
+  }
+
+  /**
+   * RECONCILIATION REVIEW — Variance Investigator
+   * Scans every barcode and returns those whose auto-reconciliation does NOT balance
+   * (Purchased ≠ Available + Quick Sold + Pantry In-Stock + Returned + Pantry-Pay Consumed
+   *  + Auditor Missing + In-Transit + Reconciled Adjustments). These are candidates an admin
+   * must review & resolve (legacy seed gaps, untracked shrinkage, etc.).
+   */
+  static getReconciliationReview(): {
+    summary: { totalBarcodesScanned: number; flaggedCount: number; totalUnaccounted: number; totalOverCounted: number };
+    items: {
+      barcode: string;
+      productId: string;
+      productName: string;
+      category: string;
+      purchased: number;
+      available: number;
+      quickSold: number;
+      pantryInStock: number;
+      returned: number;
+      pantryPayConsumed: number;
+      auditorMissing: number;
+      inTransit: number;
+      reconciledAdjustment: number;
+      accounted: number;
+      variance: number;
+      alreadyResolvedQty: number;
+    }[];
+  } {
+    const db = store.getDb();
+    const barcodes = new Set<string>();
+    (db.batches || []).forEach((b) => { if (b.barcode) barcodes.add(b.barcode.trim()); });
+    (db.products || []).forEach((p) => { if (p.barcode) barcodes.add(p.barcode.trim()); });
+
+    const items: any[] = [];
+    let totalUnaccounted = 0;
+    let totalOverCounted = 0;
+
+    barcodes.forEach((bc) => {
+      let d;
+      try {
+        d = this.getBarcodeFullLifecycleDetails(bc);
+      } catch {
+        return;
+      }
+      const s = d.summary;
+      const availExclReturned = s.totalAvailableStock - s.totalReturnedStock;
+      const accounted =
+        availExclReturned + s.totalQuickSold + s.totalPantryInStock + s.totalReturnedStock +
+        s.totalPantryPayConsumed + s.totalAuditorMissing + (s.totalPantryInTransit || 0) + (s.totalReconciledAdjustment || 0);
+      const variance = s.totalInitialPurchased - accounted;
+      if (variance !== 0) {
+        if (variance > 0) totalUnaccounted += variance;
+        else totalOverCounted += Math.abs(variance);
+        items.push({
+          barcode: bc,
+          productId: d.product.id,
+          productName: d.product.name,
+          category: d.product.category || 'General',
+          purchased: s.totalInitialPurchased,
+          available: s.totalAvailableStock,
+          quickSold: s.totalQuickSold,
+          pantryInStock: s.totalPantryInStock,
+          returned: s.totalReturnedStock,
+          pantryPayConsumed: s.totalPantryPayConsumed,
+          auditorMissing: s.totalAuditorMissing,
+          inTransit: s.totalPantryInTransit || 0,
+          reconciledAdjustment: s.totalReconciledAdjustment || 0,
+          accounted,
+          variance,
+          alreadyResolvedQty: s.totalReconciledAdjustment || 0,
+        });
+      }
+    });
+
+    items.sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+
+    return {
+      summary: {
+        totalBarcodesScanned: barcodes.size,
+        flaggedCount: items.length,
+        totalUnaccounted,
+        totalOverCounted,
+      },
+      items,
+    };
+  }
+
+  /**
+   * RESOLVE a barcode's reconciliation variance by recording a signed adjustment
+   * (shrinkage / legacy write-off). This makes the formula balance and is fully audit-logged.
+   */
+  static resolveReconciliationVariance(
+    payload: { barcode: string; quantity?: number; reason?: string; category?: string },
+    user: User
+  ): ReconciliationAdjustment {
+    const db = store.getDb();
+    const barcode = (payload.barcode || '').trim();
+    if (!barcode) throw new Error('Barcode is required to resolve a reconciliation variance.');
+
+    const details = this.getBarcodeFullLifecycleDetails(barcode);
+    const s = details.summary;
+    const availExclReturned = s.totalAvailableStock - s.totalReturnedStock;
+    const accounted =
+      availExclReturned + s.totalQuickSold + s.totalPantryInStock + s.totalReturnedStock +
+      s.totalPantryPayConsumed + s.totalAuditorMissing + (s.totalPantryInTransit || 0) + (s.totalReconciledAdjustment || 0);
+    const currentVariance = s.totalInitialPurchased - accounted;
+
+    // Default: write off exactly the current open variance so it balances to zero.
+    const qty = payload.quantity !== undefined ? payload.quantity : currentVariance;
+    if (qty === 0) throw new Error('This barcode is already fully reconciled (variance is zero).');
+
+    if (!db.reconciliationAdjustments) db.reconciliationAdjustments = [];
+    const now = new Date();
+    const adj: ReconciliationAdjustment = {
+      id: `RECON-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+      barcode,
+      productId: details.product.id,
+      productName: details.product.name,
+      quantity: qty,
+      reason: payload.reason || (qty > 0 ? 'Unaccounted units written off (shrinkage / legacy data gap)' : 'Over-count correction'),
+      category: (payload.category as any) || (qty > 0 ? 'SHRINKAGE' : 'MANUAL_CORRECTION'),
+      resolvedBy: user?.name || 'Admin',
+      resolvedByRole: user?.role || 'ADMIN',
+      createdAt: now.toISOString(),
+      date: now.toISOString().split('T')[0],
+      time: getNowTimeWithSeconds(),
+    };
+    db.reconciliationAdjustments.unshift(adj);
+
+    this.logAudit({
+      who: user?.name || 'Admin',
+      userMobile: user?.mobile,
+      role: user?.role || 'ADMIN',
+      action: 'RECONCILIATION_VARIANCE_RESOLVED',
+      entity: 'INVENTORY_RECONCILIATION',
+      entityId: barcode,
+      newValue: `Resolved variance of ${qty} unit(s) for barcode ${barcode} (${details.product.name}). Category: ${adj.category}. Reason: ${adj.reason}`,
+    });
+
+    store.save();
+    return adj;
   }
 
   /**

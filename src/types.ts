@@ -1111,6 +1111,7 @@ export interface BarcodeSummaryStats {
   totalPantryInTransit: number; // Pantry units stock-deducted but not yet delivered (temporary variance)
   totalPantryPayConsumed: number; // Units consumed & paid via Pantry Pay
   totalAuditorMissing: number; // Units missing on customer-confirmed audit bills only
+  totalReconciledAdjustment: number; // Admin-resolved variance (shrinkage/legacy write-off) that explains unaccounted units
   averagePurchaseRate: number;
   sellingPrice: number;
   mrp: number;
@@ -1153,6 +1154,45 @@ export interface BarcodeLifecycleDetails {
   auditLogs: AuditLog[];
   ledgerTimeline: BatchLedgerEntry[];
   consumptionHistory: BarcodeConsumptionEntry[];
+}
+
+export interface ReconciliationAdjustment {
+  id: string;
+  barcode: string;
+  productId?: string;
+  productName?: string;
+  quantity: number; // signed: positive = unaccounted units written off (shrinkage), negative = over-count correction
+  reason: string;
+  category: 'SHRINKAGE' | 'LEGACY_DATA' | 'DAMAGE_UNTRACKED' | 'MANUAL_CORRECTION' | 'OTHER';
+  resolvedBy: string;
+  resolvedByRole?: string;
+  createdAt: string;
+  date: string;
+  time: string;
+}
+
+export interface ReconciliationReviewItem {
+  barcode: string;
+  productId: string;
+  productName: string;
+  category: string;
+  purchased: number;
+  available: number;
+  quickSold: number;
+  pantryInStock: number;
+  returned: number;
+  pantryPayConsumed: number;
+  auditorMissing: number;
+  inTransit: number;
+  reconciledAdjustment: number;
+  accounted: number;
+  variance: number;
+  alreadyResolvedQty: number;
+}
+
+export interface ReconciliationReviewResponse {
+  summary: { totalBarcodesScanned: number; flaggedCount: number; totalUnaccounted: number; totalOverCounted: number };
+  items: ReconciliationReviewItem[];
 }
 
 export interface CustomerPantryHolding {

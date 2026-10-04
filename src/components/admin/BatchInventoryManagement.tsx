@@ -7,6 +7,7 @@ import { ProductDetailModal } from '../common/ProductDetailModal';
 import { AppWindowModal } from '../common/AppWindowModal';
 import { BatchDetailHistoryModal } from './BatchDetailHistoryModal';
 import { BarcodeDetailHistoryModal } from './BarcodeDetailHistoryModal';
+import { ReconciliationReviewModal } from './ReconciliationReviewModal';
 import { CustomerPantryHoldingsModal } from './CustomerPantryHoldingsModal';
 import { CustomerPantryLiveLedger } from './CustomerPantryLiveLedger';
 import { AllCustomerPantryHoldingsList } from './AllCustomerPantryHoldingsList';
@@ -39,6 +40,7 @@ import {
   ChevronDown,
   ChevronUp,
   Package,
+  ShieldAlert,
 } from 'lucide-react';
 
 export interface BarcodeGroupedRow {
@@ -118,6 +120,7 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
 
   // Barcode Detail History Modal state
   const [selectedBarcodeHistory, setSelectedBarcodeHistory] = useState<string | null>(null);
+  const [showReconReview, setShowReconReview] = useState(false);
 
   // Toggle state for constituent batches expansion under barcode merged view
   const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({});
@@ -400,6 +403,15 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
               title="Refresh Inventory"
             >
               <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowReconReview(true)}
+              data-testid="open-variance-review-btn"
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
+              title="Audit Review: barcodes jinka stock reconciliation balance nahi hota unhe dekhein aur resolve karein"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              Audit Review
             </button>
             <button
               onClick={onOpenPurchase}
@@ -1137,6 +1149,16 @@ export const BatchInventoryManagement: React.FC<BatchInventoryManagementProps> =
           onOpenPurchaseInward={onOpenPurchase}
         />
       )}
+
+      {/* Audit Review — Variance Investigator */}
+      <ReconciliationReviewModal
+        isOpen={showReconReview}
+        onClose={() => setShowReconReview(false)}
+        onOpenBarcode={(bc) => {
+          setShowReconReview(false);
+          setSelectedBarcodeHistory(bc);
+        }}
+      />
 
       {/* Batch Lifecycle Detail & Audit History Modal */}
       {selectedBatchHistoryNumber && (

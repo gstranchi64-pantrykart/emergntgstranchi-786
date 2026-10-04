@@ -24,6 +24,7 @@ import {
   ReplacementRequest,
   AuditorCheck,
   AuditorReturnOrder,
+  ReconciliationAdjustment,
   InventoryTransaction,
   AuditLog,
   AppSettings,
@@ -54,6 +55,7 @@ interface DatabaseSchema {
   settings: AppSettings;
   pantryPayments: PantryPayment[];
   auditorReturnOrders?: AuditorReturnOrder[];
+  reconciliationAdjustments?: ReconciliationAdjustment[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');

@@ -25,6 +25,8 @@ import {
   SupabaseSyncResult,
   BatchLifecycleDetails,
   BarcodeLifecycleDetails,
+  ReconciliationAdjustment,
+  ReconciliationReviewResponse,
   CustomerPantryHoldingsResponse,
 } from '../types';
 import { handleDirectSupabaseFetch } from '../lib/supabaseFallback';
@@ -299,7 +301,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   // reports must always talk to the live Express backend (single source of truth).
   // The Supabase read-layer derives data from raw tables and never reflects
   // Pantry Pay consumption, audit settlements or merged reconciliations.
-  const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments|pantry\/active-holdings|inventory\/barcode\/[^/]+\/details|batches\/[^/]+\/details)(\/|\?|$)/.test(url);
+  const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments|pantry\/active-holdings|inventory\/barcode\/[^/]+\/details|inventory\/reconciliation-review|inventory\/reconciliation-resolve|batches\/[^/]+\/details)(\/|\?|$)/.test(url);
   const directResult = isPantryLiveRoute ? null : await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
   if (directResult !== null) {
     return directResult;
@@ -718,6 +720,17 @@ export const api = {
 
   getBarcodeDetails: async (barcode: string) => {
     return fetchJson<BarcodeLifecycleDetails>(`/api/inventory/barcode/${encodeURIComponent(barcode)}/details`);
+  },
+
+  getReconciliationReview: async () => {
+    return fetchJson<ReconciliationReviewResponse>(`/api/inventory/reconciliation-review`);
+  },
+
+  resolveReconciliationVariance: async (payload: { barcode: string; quantity?: number; reason?: string; category?: string }) => {
+    return fetchJson<ReconciliationAdjustment>(`/api/inventory/reconciliation-resolve`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   getBatchesByProduct: async (productId: string) => {

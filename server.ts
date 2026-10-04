@@ -742,6 +742,24 @@ async function startServer() {
     }
   });
 
+  app.get('/api/inventory/reconciliation-review', (_req: Request, res: Response) => {
+    try {
+      return res.json(BusinessService.getReconciliationReview());
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/inventory/reconciliation-resolve', (req: Request, res: Response) => {
+    try {
+      const user = getActingUser(req);
+      const adj = BusinessService.resolveReconciliationVariance(req.body, user);
+      return res.json(adj);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
   app.get('/api/batches/product/:productId', (req: Request, res: Response) => {
     return res.json(BusinessService.getBatchesByProduct(req.params.productId));
   });
