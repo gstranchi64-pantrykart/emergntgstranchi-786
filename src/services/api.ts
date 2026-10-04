@@ -29,7 +29,7 @@ import {
   ReconciliationReviewResponse,
   CustomerPantryHoldingsResponse,
 } from '../types';
-import { handleDirectSupabaseFetch } from '../lib/supabaseFallback';
+import { handleDirectSupabaseFetch, isLiveBackendAvailable } from '../lib/supabaseFallback';
 
 // Real-Time Event Subscriber
 type RealtimeCallback = (event: { type: string; action?: string; timestamp?: number; payload?: any }) => void;
@@ -302,7 +302,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   // The Supabase read-layer derives data from raw tables and never reflects
   // Pantry Pay consumption, audit settlements or merged reconciliations.
   const isPantryLiveRoute = /\/api\/(pantry-card|pantry-payments|pantry\/active-holdings|inventory\/barcode\/[^/]+\/details|inventory\/reconciliation-review|inventory\/reconciliation-resolve|batches\/[^/]+\/details)(\/|\?|$)/.test(url);
-  const directResult = isPantryLiveRoute ? null : await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
+  // When the live Express backend is up, it is the single source of truth — skip the
+  // client-side Supabase read-layer entirely so data shows instantly (no cloud sync wait).
+  // The virtual layer is only used when there is NO backend (static hosting fallback).
+  const backendUp = isPantryLiveRoute ? true : await isLiveBackendAvailable();
+  const directResult = isPantryLiveRoute || backendUp ? null : await handleDirectSupabaseFetch<T>(url, method, requestBodyParsed);
   if (directResult !== null) {
     return directResult;
   }

@@ -48,8 +48,11 @@ async function startServer() {
   // Real-Time Synchronization via Server-Sent Events (SSE)
   const sseClients = new Set<Response>();
 
-  app.get('/api/events', (_req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/event-stream');
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', uptime: process.uptime() });
+  });
+
+  app.get('/api/events', (_req: Request, res: Response) => {    res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');

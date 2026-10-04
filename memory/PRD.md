@@ -85,6 +85,12 @@ Continue development of uploaded codebase (remix-2-nd.zip): PantryKart Live — 
 - Verified live: 12 scanned / 6 flagged (legacy seed gaps). Resolved ATT-801 (+1) → variance 0, flagged 6→5; UI resolve of Good Day (+2) → flagged 5→4, item dropped from list.
 - CAUGHT & FIXED a build-blocker during this work: an insert broke a JSDoc comment opener above getCustomerPantryHoldings → tsx transform failed → server silently fell back to STALE dist/server.cjs (new routes 404'd). Fixed comment; always watch /var/log/supervisor/frontend*.log for "tsx failed, falling back to dist bundle".
 
+## Instant Load / No Sync Wait (2026-10-04) — VERIFIED (browser timing tests)
+- Problem: app open hote waqt client-side Supabase read-layer (supabaseFallback.ts) pehle cloud se "sync" karti thi — dashboard pe ZEROS dikhte the jab tak background preheat/seed storm complete na ho; har API call pehle virtual layer ko poochti thi.
+- Fix: naya `isLiveBackendAvailable()` probe (GET /api/health, 1.5s timeout, JSON content-type check, 30s retry TTL on failure, success cached for session). Jab live Express backend mile → (1) fetchJson har route ko seedha Express se laata hai, virtual layer sirf tab jab backend ho hi na (static/Vercel hosting fallback preserved, incl. non-OK Express response fallback), (2) module-load Supabase preheat/seed storm completely skip hota hai.
+- Naya route: GET /api/health (server.ts).
+- Measured: page load → login form 0.5s; login → dashboard shell 1.0s; real stats 1.1s after login (pehle zeros → sync ke baad populate); customer portal full catalog instant. Console me "Failed to fetch" PostgREST storm = 0 warnings.
+
 ## Backlog / Next
 - P0: NATIVE EMERGENT DEPLOY NOT SUPPORTED for this stack (Node/Express/Vite/Supabase single-process). Emergent only deploys FastAPI(Python) or Next.js backends + MongoDB. Options: (A) deploy externally on Vercel/Render/Railway via GitHub, set Supabase env secrets there; or (B) full rebuild on FastAPI+React+Mongo template. App runs fine in PREVIEW; only native prod deploy is unsupported.
 - P1: Real Razorpay keys to replace demo gateway

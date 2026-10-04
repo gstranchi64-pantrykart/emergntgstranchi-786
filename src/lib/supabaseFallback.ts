@@ -731,6 +731,41 @@ function triggerBackgroundTask(task: () => Promise<void>) {
   }, 0);
 }
 
+// ---------------------------------------------------------------------------
+// LIVE BACKEND PROBE
+// When the Express API answers /api/health, it is the single source of truth:
+// the client-side Supabase read-layer (this module) must stay OUT of the way so
+// the UI shows real data instantly instead of waiting on cloud sync storms.
+// ---------------------------------------------------------------------------
+let liveBackendProbe: { promise: Promise<boolean>; succeeded: boolean; failedAt: number } | null = null;
+
+export function isLiveBackendAvailable(): Promise<boolean> {
+  if (liveBackendProbe) {
+    if (liveBackendProbe.succeeded) return liveBackendProbe.promise;
+    // Retry a failed probe at most every 30s (backend may come up shortly after page load)
+    if (Date.now() - liveBackendProbe.failedAt < 30000) return liveBackendProbe.promise;
+  }
+  const state = { promise: null as unknown as Promise<boolean>, succeeded: false, failedAt: 0 };
+  state.promise = (async () => {
+    try {
+      const controller = new AbortController();
+      const to = setTimeout(() => controller.abort(), 1500);
+      const r = await fetch(`/api/health?_probe=${Date.now()}`, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(to);
+      const ok = r.ok && (r.headers.get('content-type') || '').includes('application/json');
+      state.succeeded = ok;
+      if (!ok) state.failedAt = Date.now();
+      if (ok) console.log('[PantryMaster] Live Express backend detected — cloud read-layer bypassed for instant load.');
+      return ok;
+    } catch {
+      state.failedAt = Date.now();
+      return false;
+    }
+  })();
+  liveBackendProbe = state;
+  return state.promise;
+}
+
 export async function seedSupabaseIfEmpty() {
   try {
     const [prods, custs, ords, auds, deliv, cats, bts, purs] = await Promise.all([
@@ -932,7 +967,12 @@ export function preheatSupabaseConnection() {
   });
 }
 
-preheatSupabaseConnection();
+isLiveBackendAvailable().then((backendUp) => {
+  if (!backendUp) {
+    // Static deployment (no live backend) — warm up the client-side Supabase store.
+    preheatSupabaseConnection();
+  }
+});
 
 export async function handleDirectSupabaseFetch<T>(
   url: string,
